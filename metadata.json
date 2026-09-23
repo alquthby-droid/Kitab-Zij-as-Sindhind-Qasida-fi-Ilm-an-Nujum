@@ -1,0 +1,6 @@
+{
+  "name": "Zij as-Sindhind & Qasida fi 'Ilm an-Nujum",
+  "description": "Aplikasi astronomi dan astrologi klasik berdasarkan naskah kuno Zij as-Sindhind dan Qasida fi 'Ilm an-Nujum dengan ephemeris historis, visualisasi orbit D3.js, bola langit 3D 28 Manzil (D3 Celestial Sphere), modul Peta Langit, Manzil Calculator dengan ekspor kalender iCal, tabel aspek & matriks synastry, modul Ahkam al-Mawlayin, dan ekspor riset PDF.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
