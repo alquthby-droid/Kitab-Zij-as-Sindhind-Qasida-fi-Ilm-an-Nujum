@@ -78,7 +78,7 @@ export const ManuscriptsArchiveView: React.FC<ManuscriptsArchiveViewProps> = ({
       <div className="flex flex-wrap items-center justify-between gap-3 mb-5 border-b pb-3 border-current/10">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-xs px-2.5 py-0.5 rounded-full font-mono font-semibold uppercase tracking-wider bg-[#c59a43]/20 text-[#c59a43] border border-[#c59a43]/40">
+            <span className="text-sm px-2.5 py-0.5 rounded-full font-arabic font-semibold bg-[#c59a43]/20 text-[#c59a43] border border-[#c59a43]/40">
               خزانة المخطوطات والوثائق
             </span>
             <h2 className="text-lg font-bold font-serif">
@@ -128,7 +128,7 @@ export const ManuscriptsArchiveView: React.FC<ManuscriptsArchiveViewProps> = ({
                 <h3 className="font-serif font-bold text-base leading-snug">
                   {currentDoc.titleLatin}
                 </h3>
-                <p className="font-serif text-sm text-[#c59a43]" dir="rtl">
+                <p className="font-arabic text-lg text-[#c59a43] mt-0.5" dir="rtl">
                   {currentDoc.titleArabic}
                 </p>
                 <p className="text-xs opacity-80 mt-1">
@@ -215,7 +215,7 @@ export const ManuscriptsArchiveView: React.FC<ManuscriptsArchiveViewProps> = ({
                 {/* Arabic Calligraphy Text */}
                 <div
                   dir="rtl"
-                  className="p-3 rounded-lg mb-3 leading-relaxed font-serif text-base text-[#c59a43] bg-current/5 border border-current/10"
+                  className="p-3.5 rounded-xl mb-3 font-arabic text-xl sm:text-2xl leading-loose text-[#c59a43] bg-current/5 border border-current/10"
                 >
                   {verse.arabicText}
                 </div>

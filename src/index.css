@@ -1,1 +1,63 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --font-arabic: "Scheherazade New", "Amiri", "Noto Naskh Arabic", serif;
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    overscroll-behavior-y: contain;
+    touch-action: manipulation;
+    font-family: "Plus Jakarta Sans", var(--font-arabic), ui-sans-serif, system-ui, sans-serif;
+  }
+}
+
+.font-sans {
+  font-family: "Plus Jakarta Sans", var(--font-arabic), ui-sans-serif, system-ui, sans-serif;
+}
+
+.font-serif {
+  font-family: "Playfair Display", "Cinzel", var(--font-arabic), ui-serif, Georgia, serif;
+}
+
+.font-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, var(--font-arabic), monospace;
+}
+
+.font-arabic,
+[dir="rtl"],
+[lang="ar"] {
+  font-family: var(--font-arabic) !important;
+  letter-spacing: 0 !important;
+  font-feature-settings: "liga" 1, "calt" 1, "kern" 1;
+  font-variant-ligatures: contextual common-ligatures;
+  line-height: 1.75;
+}
+
+.writing-vertical {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.pb-safe {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}

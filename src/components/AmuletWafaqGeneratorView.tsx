@@ -42,16 +42,34 @@ import {
   AMULET_THEMES,
   HAJAT_PRESETS,
   SEVEN_TALISMANIC_SIGILS,
+  INK_COLOR_PRESETS,
+  CALLIGRAPHY_STYLES,
   AmuletThemeId,
   HajatPurpose,
   WafaqGridType,
   NumeralStyle,
+  InkColorId,
+  CalligraphyStyleId,
   APP_DEVELOPER_INFO,
   getIntisariAmuletWafaq,
 } from '../lib/wafaqEngine';
 import { transliterateLatinToArabic } from '../lib/hisabJumalEngine';
+import { ZODIAC_SIGNS } from '../lib/sindhindEngine';
 import { AmuletCanvasRenderer } from './AmuletCanvasRenderer';
-import { HistoricalDateInfo, PlanetaryPosition, AspectRelation } from '../types';
+import { WafaqEtchingVisualizer, RulerPositionSnapshot } from './WafaqEtchingVisualizer';
+import { HistoricalDateInfo, PlanetaryPosition, AspectRelation, PlanetKey } from '../types';
+
+function resolveRulerPlanetKey(spiritualRuler: string): PlanetKey | null {
+  const lower = spiritualRuler.toLowerCase();
+  if (lower.includes('mars') || lower.includes('mirrikh')) return 'mars';
+  if (lower.includes('venus') || lower.includes('zuharah') || lower.includes('zuhrah')) return 'venus';
+  if (lower.includes('merkurius') || lower.includes('mercury') || lower.includes('utarid')) return 'mercury';
+  if (lower.includes('bulan') || lower.includes('qamar') || lower.includes('moon')) return 'moon';
+  if (lower.includes('matahari') || lower.includes('syams') || lower.includes('shams') || lower.includes('sun')) return 'sun';
+  if (lower.includes('jupiter') || lower.includes('yupiter') || lower.includes('musytari')) return 'jupiter';
+  if (lower.includes('saturnus') || lower.includes('saturn') || lower.includes('zuhal')) return 'saturn';
+  return null;
+}
 
 interface AmuletWafaqGeneratorViewProps {
   currentMoonPosition?: PlanetaryPosition;
@@ -84,10 +102,14 @@ export const AmuletWafaqGeneratorView: React.FC<AmuletWafaqGeneratorViewProps> =
   const [selectedTheme, setSelectedTheme] = useState<AmuletThemeId>('parchment');
   const [gridType, setGridType] = useState<WafaqGridType>('3x3');
   const [numeralStyle, setNumeralStyle] = useState<NumeralStyle>('arabic');
+  const [inkColorId, setInkColorId] = useState<InkColorId>('theme_default');
+  const [customInkHex, setCustomInkHex] = useState<string>('#9a3412');
+  const [calligraphyStyleId, setCalligraphyStyleId] = useState<CalligraphyStyleId>('thuluth');
   const [personName, setPersonName] = useState<string>('');
   const [copiedNotification, setCopiedNotification] = useState<string | null>(null);
   const [showClassicalGuidelines, setShowClassicalGuidelines] = useState<boolean>(false);
   const [isExporting, setIsExporting] = useState<boolean>(false);
+  const [canvasStageMode, setCanvasStageMode] = useState<'preview' | 'etching'>('etching');
 
   // Hidden high-res canvas ref for raster exports
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -108,8 +130,39 @@ export const AmuletWafaqGeneratorView: React.FC<AmuletWafaqGeneratorViewProps> =
       numeralStyle,
       personName: personName.trim(),
       personNameArabic: personNameArabic,
+      inkColorId,
+      customInkHex,
+      calligraphyStyleId,
     });
-  }, [selectedManzilNum, selectedHajat, selectedTheme, gridType, numeralStyle, personName, personNameArabic]);
+  }, [
+    selectedManzilNum,
+    selectedHajat,
+    selectedTheme,
+    gridType,
+    numeralStyle,
+    personName,
+    personNameArabic,
+    inkColorId,
+    customInkHex,
+    calligraphyStyleId,
+  ]);
+
+  // Live ruler planet position snapshot from Sindhind ephemeris
+  const rulerSnapshot = useMemo<RulerPositionSnapshot | null>(() => {
+    if (!allPositions) return null;
+    const key = resolveRulerPlanetKey(amuletData.manzil.spiritualRuler);
+    if (!key || !allPositions[key]) return null;
+    const pos = allPositions[key];
+    const sign = ZODIAC_SIGNS[pos.coordinate.signIndex];
+    const degStr = `${Math.floor(pos.coordinate.signDegree)}° ${String(pos.coordinate.signDegreeMinutes).padStart(2, '0')}'`;
+    return {
+      planetName: `${pos.planet.transliteration} (${pos.planet.arabicName})`,
+      zodiacName: `${sign.latinName} (${sign.arabicName})`,
+      degreeFormatted: degStr,
+      isRetrograde: pos.isRetrograde,
+      dignity: pos.dignity.description,
+    };
+  }, [allPositions, amuletData.manzil.spiritualRuler]);
 
   // Synchronize with active moon mansion
   const handleSyncActiveMoon = () => {
@@ -353,6 +406,18 @@ Berdasarkan kaidah Syams al-Ma'arif al-Kubra (Al-Buni) & Kitab al-Awfaq (Al-Ghaz
                   </span>
                 </div>
               </div>
+              {rulerSnapshot && (
+                <div className="pt-1.5 mt-1 border-t border-current/10 text-[11px] flex flex-wrap items-center justify-between gap-1 text-stone-600 dark:text-stone-300">
+                  <span>
+                    Posisi Penguasa Planet:{' '}
+                    <strong className="font-mono tabular-nums text-amber-700 dark:text-amber-300">
+                      {rulerSnapshot.zodiacName} {rulerSnapshot.degreeFormatted}
+                    </strong>
+                    {rulerSnapshot.isRetrograde ? ' · Rujū\' (Retrograde)' : ''}
+                  </span>
+                  <span className="text-[10px] opacity-80">{rulerSnapshot.dignity}</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -503,7 +568,7 @@ Berdasarkan kaidah Syams al-Ma'arif al-Kubra (Al-Buni) & Kitab al-Awfaq (Al-Ghaz
                     <button
                       key={themeKey}
                       onClick={() => setSelectedTheme(themeKey)}
-                      className={`p-2 rounded-xl border text-left flex items-center gap-2 transition-all ${
+                      className={`p-2 rounded-xl border text-left flex items-center gap-2 transition-all cursor-pointer ${
                         isSelected
                           ? 'border-amber-500 ring-2 ring-amber-500/20 shadow-sm'
                           : 'border-stone-200 dark:border-[#23314d] hover:brightness-95'
@@ -533,30 +598,183 @@ Berdasarkan kaidah Syams al-Ma'arif al-Kubra (Al-Buni) & Kitab al-Awfaq (Al-Ghaz
                 })}
               </div>
             </div>
+
+            {/* 6. PERSONALISASI WARNA TINTA & GAYA KALIGRAFI (KHAT) */}
+            <div className="space-y-3 pt-3 border-t border-current/10">
+              {/* Gaya Kaligrafi (Khat) */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-stone-700 dark:text-stone-300 uppercase tracking-wider">
+                    Gaya Kaligrafi Arab (Khat)
+                  </label>
+                  <span className="text-[10px] text-amber-700 dark:text-amber-400 font-medium">
+                    {CALLIGRAPHY_STYLES[calligraphyStyleId].name}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {(Object.keys(CALLIGRAPHY_STYLES) as CalligraphyStyleId[]).map((khatKey) => {
+                    const k = CALLIGRAPHY_STYLES[khatKey];
+                    const isSelected = calligraphyStyleId === khatKey;
+                    return (
+                      <button
+                        key={khatKey}
+                        type="button"
+                        onClick={() => setCalligraphyStyleId(khatKey)}
+                        className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer min-h-[48px] flex items-center justify-between gap-2 ${
+                          isSelected
+                            ? 'border-amber-500 bg-amber-500/15 dark:bg-amber-500/20 text-stone-900 dark:text-stone-100 shadow-sm'
+                            : 'border-[#dacdb2] dark:border-[#25344f] bg-white/70 dark:bg-[#0f1422] text-stone-700 dark:text-stone-300 hover:border-amber-500/50'
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <div className="text-xs font-serif font-bold truncate">{k.name}</div>
+                          <div className="text-[10px] opacity-75 truncate">{k.nameArabic}</div>
+                        </div>
+                        <span
+                          className="text-base font-bold text-amber-700 dark:text-amber-300 shrink-0"
+                          style={{ fontFamily: k.fontFamily, fontStyle: k.fontStyle }}
+                        >
+                          وَفْق
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                  {CALLIGRAPHY_STYLES[calligraphyStyleId].letterStyleNote}
+                </p>
+              </div>
+
+              {/* Warna Tinta Kaligrafi */}
+              <div className="space-y-1.5 pt-2 border-t border-current/10">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-stone-700 dark:text-stone-300 uppercase tracking-wider">
+                    Warna Tinta / Pigmen Ukiran
+                  </label>
+                  <span className="text-[10px] text-amber-700 dark:text-amber-400 font-medium">
+                    {amuletData.inkColor.name}
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Auto / Theme Default */}
+                  <button
+                    type="button"
+                    onClick={() => setInkColorId('theme_default')}
+                    className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-medium transition-all cursor-pointer min-h-[36px] ${
+                      inkColorId === 'theme_default'
+                        ? 'border-amber-500 bg-amber-500/20 text-stone-900 dark:text-stone-100 font-bold'
+                        : 'border-[#dacdb2] dark:border-[#25344f] bg-white/60 dark:bg-[#0f1422] text-stone-600 dark:text-stone-300'
+                    }`}
+                  >
+                    Otomatis Media
+                  </button>
+
+                  {/* Preset Swatches */}
+                  {(Object.keys(INK_COLOR_PRESETS) as Array<keyof typeof INK_COLOR_PRESETS>).map((inkKey) => {
+                    const ink = INK_COLOR_PRESETS[inkKey];
+                    const isSelected = inkColorId === inkKey;
+                    return (
+                      <button
+                        key={inkKey}
+                        type="button"
+                        onClick={() => setInkColorId(inkKey)}
+                        title={`${ink.name} (${ink.nameArabic}) — ${ink.description}`}
+                        className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-medium flex items-center gap-1.5 transition-all cursor-pointer min-h-[36px] ${
+                          isSelected
+                            ? 'border-amber-500 ring-2 ring-amber-500/25 bg-amber-500/15 text-stone-900 dark:text-stone-100 font-bold'
+                            : 'border-[#dacdb2] dark:border-[#25344f] bg-white/60 dark:bg-[#0f1422] text-stone-700 dark:text-stone-300 hover:border-amber-500/50'
+                        }`}
+                      >
+                        <span
+                          className="w-3.5 h-3.5 rounded-full border border-black/25 shrink-0"
+                          style={{ backgroundColor: ink.primaryHex }}
+                        />
+                        <span>{ink.name.replace('Tinta ', '').split('(')[0].trim()}</span>
+                      </button>
+                    );
+                  })}
+
+                  {/* Custom Hex Color Picker */}
+                  <label
+                    className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-medium flex items-center gap-1.5 cursor-pointer min-h-[36px] ${
+                      inkColorId === 'custom'
+                        ? 'border-amber-500 ring-2 ring-amber-500/25 bg-amber-500/15 text-stone-900 dark:text-stone-100 font-bold'
+                        : 'border-[#dacdb2] dark:border-[#25344f] bg-white/60 dark:bg-[#0f1422] text-stone-700 dark:text-stone-300'
+                    }`}
+                    title="Pilih warna tinta kustom"
+                  >
+                    <input
+                      type="color"
+                      value={customInkHex}
+                      onChange={(e) => {
+                        setCustomInkHex(e.target.value);
+                        setInkColorId('custom');
+                      }}
+                      className="w-4 h-4 rounded border-0 bg-transparent p-0 cursor-pointer"
+                      aria-label="Warna Tinta Kustom"
+                    />
+                    <span>Kustom</span>
+                  </label>
+                </div>
+
+                <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                  {amuletData.inkColor.description}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Interactive Amulet Canvas & Action Panel (7 cols) */}
+        {/* RIGHT COLUMN: Interactive Amulet Canvas & Etching Visualizer (7 cols) */}
         <div className="lg:col-span-7 space-y-4 flex flex-col items-center">
-          {/* Action Bar (Download, Print, Copy) */}
+          {/* Stage Mode Switcher & Action Bar */}
           <div className="w-full flex flex-wrap items-center justify-between gap-2 bg-[#f7f2e7] dark:bg-[#151c2e] border border-[#dacdb2] dark:border-[#25344f] rounded-2xl p-3 shadow-sm">
-            <div className="flex items-center gap-1.5">
+            {/* Mode Switcher: Simulator Pengukiran vs Pratinjau Manuskrip */}
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-stone-200/70 dark:bg-[#0c1222] border border-[#dacdb2] dark:border-[#25344f]">
+              <button
+                type="button"
+                onClick={() => setCanvasStageMode('etching')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                  canvasStageMode === 'etching'
+                    ? 'bg-amber-600 text-white shadow-sm'
+                    : 'text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Simulator Pengukiran</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCanvasStageMode('preview')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                  canvasStageMode === 'preview'
+                    ? 'bg-amber-600 text-white shadow-sm'
+                    : 'text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white'
+                }`}
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>Pratinjau Cetak</span>
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
               {/* Download PNG Button */}
               <button
                 onClick={() => handleDownloadImage('png')}
                 disabled={isExporting}
-                className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold shadow-md flex items-center gap-1.5 transition-transform active:scale-95 cursor-pointer"
+                className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold shadow-sm flex items-center gap-1.5 transition-transform active:scale-95 cursor-pointer whitespace-nowrap"
                 title="Unduh jimat resolusi tinggi format PNG (2400x2400 px)"
               >
-                <Download className="w-4 h-4" />
-                <span>Unduh Gambar PNG</span>
+                <Download className="w-3.5 h-3.5" />
+                <span>PNG</span>
               </button>
 
               {/* Download JPEG Button */}
               <button
                 onClick={() => handleDownloadImage('jpeg')}
                 disabled={isExporting}
-                className="px-3 py-2 rounded-xl bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="px-2.5 py-1.5 rounded-xl bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer"
                 title="Unduh gambar dalam format JPEG"
               >
                 <span>JPEG</span>
@@ -565,19 +783,17 @@ Berdasarkan kaidah Syams al-Ma'arif al-Kubra (Al-Buni) & Kitab al-Awfaq (Al-Ghaz
               {/* Print Button */}
               <button
                 onClick={handlePrint}
-                className="px-3 py-2 rounded-xl bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="px-2.5 py-1.5 rounded-xl bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
                 title="Cetak jimat langsung ke printer atau simpan sebagai dokumen PDF cetak"
               >
-                <Printer className="w-4 h-4" />
+                <Printer className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Cetak</span>
               </button>
-            </div>
 
-            <div className="flex items-center gap-1.5">
               {/* Copy Summary */}
               <button
                 onClick={handleCopySummary}
-                className="p-2 rounded-xl bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 text-xs transition-colors"
+                className="p-1.5 rounded-xl bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 text-xs transition-colors cursor-pointer"
                 title="Salin ikhtisar talisman ke clipboard"
               >
                 <Copy className="w-4 h-4" />
@@ -587,18 +803,25 @@ Berdasarkan kaidah Syams al-Ma'arif al-Kubra (Al-Buni) & Kitab al-Awfaq (Al-Ghaz
               {onAnnotate && (
                 <button
                   onClick={handleSaveAnnotation}
-                  className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium flex items-center gap-1.5 shadow-sm transition-transform active:scale-95"
+                  className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium flex items-center gap-1.5 shadow-sm transition-transform active:scale-95 cursor-pointer"
                   title="Simpan jimat ini ke Jurnal Catatan Anotasi Riset"
                 >
-                  <Bookmark className="w-4 h-4" />
-                  <span className="hidden sm:inline">Catat Riset</span>
+                  <Bookmark className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Catat</span>
                 </button>
               )}
             </div>
           </div>
 
-          {/* VISUAL AMULET CANVAS RENDERER */}
-          <div className="w-full flex justify-center py-2">
+          {/* INTERACTIVE ETCHING VISUALIZER OR HIGH-RES MANUSCRIPT PREVIEW */}
+          {canvasStageMode === 'etching' ? (
+            <WafaqEtchingVisualizer
+              amuletData={amuletData}
+              rulerSnapshot={rulerSnapshot}
+            />
+          ) : null}
+
+          <div className={canvasStageMode === 'preview' ? 'w-full flex justify-center py-2' : 'hidden'}>
             <AmuletCanvasRenderer
               amuletData={amuletData}
               canvasRef={canvasRef}

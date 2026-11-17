@@ -63,6 +63,7 @@ export const ABJAD_TABLE: Record<string, AbjadLetterInfo> = {
   'ݢ': { char: 'ݢ', name: 'Ga (Pegon)', value: 20, element: 'Udara', elementArabic: 'هوائي', nature: 'Harr Ratb (Panas-Basah)', natureArabic: 'حار رطب', spiritualNote: 'Kekuatan fisik, keuletan kerja nyata, dan kemauan keras.' },
   'ک': { char: 'ک', name: 'Ga/Kaf Varian', value: 20, element: 'Udara', elementArabic: 'هوائي', nature: 'Harr Ratb (Panas-Basah)', natureArabic: 'حار رطب', spiritualNote: 'Keluwesan komunikasi dan daya pikat kepribadian.' },
   'ڽ': { char: 'ڽ', name: 'Nya (Pegon)', value: 50, element: 'Tanah', elementArabic: 'ترابي', nature: 'Barid Yabis (Dingin-Kering)', natureArabic: 'بارد يابس', spiritualNote: 'Keteraturan laku dan ketenangan memegang amanat luhur.' },
+  'ۏ': { char: 'ۏ', name: 'Va (Jawi)', value: 6, element: 'Tanah', elementArabic: 'ترابي', nature: 'Barid Yabis (Dingin-Kering)', natureArabic: 'بارد يابس', spiritualNote: 'Keteguhan penghubung komunikasi modern Nusantara.' },
 };
 
 export type DayKey = 'ahad' | 'senin' | 'selasa' | 'rabu' | 'kamis' | 'jumat' | 'sabtu';
@@ -462,90 +463,416 @@ export const CULTURAL_JUMAL_PRESETS: JumalPreset[] = [
   },
 ];
 
+const ARAB_MELAYU_WORD_DICT: Record<string, string> = {
+  // Nama Islami & Gelar Klasik
+  muhammad: 'محمد',
+  mohammad: 'محمد',
+  mohamad: 'محمد',
+  muhamad: 'محمد',
+  ahmad: 'أحمد',
+  achmad: 'أحمد',
+  abdul: 'عبد',
+  abdullah: 'عبد الله',
+  abdulah: 'عبد الله',
+  abdurrahman: 'عبد الرحمن',
+  abdulrahman: 'عبد الرحمن',
+  abdulaziz: 'عبد العزيز',
+  abdulmalik: 'عبد الملك',
+  abdulkarim: 'عبد الكريم',
+  abdulhalim: 'عبد الحليم',
+  abdulhakim: 'عبد الحكيم',
+  ali: 'علي',
+  hasan: 'حسن',
+  husain: 'حسين',
+  husein: 'حسين',
+  husen: 'حسين',
+  husni: 'حسني',
+  umar: 'عمر',
+  utsman: 'عثمان',
+  usman: 'عثمان',
+  ibrahim: 'إبراهيم',
+  ismail: 'إسماعيل',
+  ishaq: 'إسحاق',
+  yusuf: 'يوسف',
+  jusuf: 'يوسف',
+  musa: 'موسى',
+  isa: 'عيسى',
+  daud: 'داود',
+  sulaiman: 'سليمان',
+  yahya: 'يحيى',
+  zakaria: 'زكريا',
+  ilyas: 'إلياس',
+  yunus: 'يونس',
+  adam: 'آدم',
+  idris: 'إدريس',
+  luqman: 'لقمان',
+  bilal: 'بلال',
+  hamzah: 'حمزة',
+  khalid: 'خالد',
+  salman: 'سلمان',
+  zaid: 'زيد',
+  tariq: 'طارق',
+  thariq: 'طارق',
+  hanif: 'حنيف',
+  zaki: 'زكي',
+  nabil: 'نبيل',
+  amir: 'أمير',
+  amin: 'أمين',
+  iman: 'إيمان',
+  ihsan: 'إحسان',
+  ikhlas: 'إخلاص',
+  ilham: 'إلهام',
+  irfan: 'عرفان',
+  iqbal: 'إقبال',
+  taufik: 'توفيق',
+  taufiq: 'توفيق',
+  hidayat: 'هداية',
+  hidayah: 'هداية',
+  rahmat: 'رحمت',
+  rahmad: 'رحمت',
+  rahman: 'رحمن',
+  rahim: 'رحيم',
+  hakim: 'حكيم',
+  karim: 'كريم',
+  halim: 'حليم',
+  salim: 'سليم',
+  malik: 'مالك',
+  akbar: 'أكبر',
+  aziz: 'عزيز',
+  latif: 'لطيف',
+  syarif: 'شريف',
+  majid: 'مجيد',
+  nasir: 'ناصر',
+  mansur: 'منصور',
+  jamal: 'جمال',
+  kamal: 'كمال',
+  fajar: 'فجر',
+  ridwan: 'رضوان',
+  farhan: 'فرحان',
+  fauzan: 'فوزان',
+  fauzi: 'فوزي',
+  hadi: 'هادي',
+  arif: 'عارف',
+  anwar: 'أنور',
+  azhar: 'أزهر',
+  maulana: 'مولانا',
+  ramadhan: 'رمضان',
+  ramadan: 'رمضان',
+  syamsul: 'شمسول',
+  samsul: 'شمسول',
+  rizal: 'ريزال',
+  hasyim: 'هاشم',
+  dahlan: 'دحلان',
+  asyari: 'أشعري',
+  wahid: 'واحد',
+  zulkifli: 'ذو الكفل',
+  iskandar: 'إسكندر',
+  fatimah: 'فاطمة',
+  aisyah: 'عائشة',
+  khadijah: 'خديجة',
+  aminah: 'آمنة',
+  maryam: 'مريم',
+  mariam: 'مريم',
+  zainab: 'زينب',
+  hafshah: 'حفصة',
+  zahra: 'زهراء',
+  salma: 'سلمى',
+  nadia: 'نادية',
+  hawa: 'حواء',
+  nur: 'نور',
+  nurul: 'نور ال',
+  siti: 'سيتي',
+  fitri: 'فطري',
+  fitriani: 'فطرياني',
+  // Nama Nusantara / Melayu / Jawa Umum
+  mulyadi: 'موليادي',
+  budi: 'بودي',
+  santoso: 'سانتوسو',
+  susanto: 'سوسانتو',
+  wahyu: 'وحيو',
+  agung: 'أݢوڠ',
+  agus: 'أݢوس',
+  andi: 'أندي',
+  eko: 'ايكو',
+  joko: 'جوكو',
+  slamet: 'سلامت',
+  surya: 'سوريا',
+  wijaya: 'ويجايا',
+  kusuma: 'كوسوما',
+  pratama: 'ڤراتاما',
+  saputra: 'ساڤوترا',
+  syahputra: 'شاهڤوترا',
+  syah: 'شاه',
+  putra: 'ڤوترا',
+  putri: 'ڤوتري',
+  dewi: 'ديوي',
+  indah: 'إينده',
+  lestari: 'لستاري',
+  sari: 'ساري',
+  wati: 'واتي',
+  sri: 'سري',
+  ratna: 'رتنا',
+  kartika: 'كرتيكا',
+  kartini: 'كرتيني',
+  bambang: 'بامباڠ',
+  sudirman: 'سوديرمان',
+  soekarno: 'سوكارنو',
+  sukarno: 'سوكارنو',
+  habibie: 'حبيبي',
+  wibowo: 'ويبووو',
+  prasetyo: 'ڤراسيتيو',
+  nugroho: 'نوݢروهو',
+  gunawan: 'ݢوناوان',
+  setiawan: 'ستياوان',
+  kurniawan: 'كورنياوان',
+  perkasa: 'ڤركاسا',
+  bin: 'بن',
+  binti: 'بنت',
+  al: 'ال',
+};
+
+interface PhonemeToken {
+  type: 'C' | 'V';
+  raw: string;
+  jawi: string;
+}
+
+function tokenizeWordForJawi(word: string): PhonemeToken[] {
+  const tokens: PhonemeToken[] = [];
+  let i = 0;
+
+  while (i < word.length) {
+    const two = word.slice(i, i + 2);
+
+    // Diphthongs & double vowels
+    if (two === 'ai') {
+      tokens.push({ type: 'V', raw: 'ai', jawi: 'اي' });
+      i += 2;
+      continue;
+    }
+    if (two === 'au') {
+      tokens.push({ type: 'V', raw: 'au', jawi: 'او' });
+      i += 2;
+      continue;
+    }
+    if (two === 'oi') {
+      tokens.push({ type: 'V', raw: 'oi', jawi: 'وي' });
+      i += 2;
+      continue;
+    }
+    if (two === 'oe') {
+      tokens.push({ type: 'V', raw: 'u', jawi: 'و' });
+      i += 2;
+      continue;
+    }
+    if (two === 'aa') {
+      tokens.push({ type: 'V', raw: 'a', jawi: 'ا' });
+      i += 2;
+      continue;
+    }
+    if (two === 'ii' || two === 'ee' || two === 'ei') {
+      tokens.push({ type: 'V', raw: 'i', jawi: 'ي' });
+      i += 2;
+      continue;
+    }
+    if (two === 'uu' || two === 'oo') {
+      tokens.push({ type: 'V', raw: 'u', jawi: 'و' });
+      i += 2;
+      continue;
+    }
+
+    // Consonant digraphs (Jawi / Pegon / Arab Melayu)
+    const digraphMap: Record<string, string> = {
+      kh: 'خ',
+      sy: 'ش',
+      sh: 'ش',
+      th: 'ث',
+      ts: 'ث',
+      dh: 'ض',
+      dz: 'ذ',
+      gh: 'غ',
+      ch: 'چ',
+      tj: 'چ',
+      dj: 'ج',
+      ng: 'ڠ',
+      ny: 'ڽ',
+    };
+    if (digraphMap[two]) {
+      tokens.push({ type: 'C', raw: two, jawi: digraphMap[two] });
+      i += 2;
+      continue;
+    }
+
+    const ch = word[i];
+    if ('aiueo'.includes(ch)) {
+      tokens.push({ type: 'V', raw: ch, jawi: ch });
+      i += 1;
+      continue;
+    }
+
+    const singleConsonantMap: Record<string, string> = {
+      b: 'ب',
+      c: 'چ',
+      d: 'د',
+      f: 'ف',
+      g: 'ݢ',
+      h: 'ه',
+      j: 'ج',
+      k: 'ك',
+      l: 'ل',
+      m: 'م',
+      n: 'ن',
+      p: 'ڤ',
+      q: 'ق',
+      r: 'ر',
+      s: 'س',
+      t: 'ت',
+      v: 'ۏ',
+      w: 'و',
+      x: 'كس',
+      y: 'ي',
+      z: 'ز',
+    };
+
+    if (singleConsonantMap[ch]) {
+      // Collapse consecutive identical consonants (e.g. 'mm' -> 'م', 'dd' -> 'د')
+      const prev = tokens[tokens.length - 1];
+      if (!(prev && prev.type === 'C' && prev.jawi === singleConsonantMap[ch])) {
+        tokens.push({ type: 'C', raw: ch, jawi: singleConsonantMap[ch] });
+      }
+    }
+    i += 1;
+  }
+
+  return tokens;
+}
+
+function transliterateWordToArabMelayu(word: string): string {
+  const clean = word.replace(/[^a-z']/g, '').replace(/'/g, '');
+  if (!clean) return '';
+
+  if (ARAB_MELAYU_WORD_DICT[clean]) {
+    return ARAB_MELAYU_WORD_DICT[clean];
+  }
+
+  const tokens = tokenizeWordForJawi(clean);
+  if (tokens.length === 0) return '';
+
+  let out = '';
+  for (let idx = 0; idx < tokens.length; idx++) {
+    const tok = tokens[idx];
+    if (tok.type === 'C') {
+      out += tok.jawi;
+      continue;
+    }
+
+    // Vowel / Diphthong rendering using Jawi / Arab Melayu orthography
+    const isInitial = idx === 0;
+    const next1 = tokens[idx + 1];
+    const next2 = tokens[idx + 2];
+
+    if (tok.raw === 'ai' || tok.raw === 'au' || tok.raw === 'oi') {
+      out += isInitial ? 'ا' + tok.jawi : tok.jawi;
+      continue;
+    }
+
+    if (tok.raw === 'a') {
+      if (isInitial) {
+        out += 'أ';
+      } else if (!next1) {
+        // Word-final open 'a'
+        out += 'ا';
+      } else if (next1.type === 'C' && next1.raw === 'h' && !next2) {
+        // Word-final '-ah' in Jawi omits alif before ha (e.g. Berkah -> بركه)
+      } else if (next1.type === 'V') {
+        out += 'ا';
+      } else if (next1.type === 'C' && (!next2 || next2.type === 'V')) {
+        // Open syllable (CV.CV) or final closed syllable (CVC) -> keep Alif saksi
+        out += 'ا';
+      } else {
+        // Non-final closed syllable (CVC.CV, e.g. Rah-mat, Bam-bang, Har-tono) -> omit Alif
+      }
+      continue;
+    }
+
+    if (tok.raw === 'i') {
+      out += isInitial ? 'إي' : 'ي';
+      continue;
+    }
+
+    if (tok.raw === 'u' || tok.raw === 'o') {
+      out += isInitial ? 'أو' : 'و';
+      continue;
+    }
+
+    if (tok.raw === 'e') {
+      if (isInitial) {
+        out += 'إي';
+      } else if (!next1 || next1.type === 'V' || !next2 || next2.type === 'V') {
+        // Open syllable / final 'e' (e.g. Dedi, Dewi, Eko)
+        out += 'ي';
+      } else {
+        // Pepet 'e' in non-final closed syllable (e.g. Perkasa, Herman, Slamet) -> omitted in Jawi
+      }
+    }
+  }
+
+  return out;
+}
+
 /**
- * Transliterate Latin text to Arabic / Pegon representation
+ * Transliterate Latin text to Arab Melayu (Jawi / Pegon) representation.
+ * Preserves text directly if it already contains Arabic letters.
  */
 export function transliterateLatinToArabic(latinText: string): string {
   if (!latinText) return '';
+  const trimmed = latinText.trim();
+  if (!trimmed) return '';
 
-  let text = latinText.toLowerCase().trim();
-
-  // Common titles / particles cleanup
-  text = text.replace(/^(raden|kyai|gus|sayyid|habib|teuku|sultan)\s+/i, '');
-
-  const rules: [RegExp, string][] = [
-    // Multigraphs
-    [/kh/g, 'خ'],
-    [/sy/g, 'ش'],
-    [/sh/g, 'ش'],
-    [/th/g, 'ث'],
-    [/ts/g, 'ث'],
-    [/dh/g, 'ض'],
-    [/dz/g, 'ذ'],
-    [/gh/g, 'غ'],
-    [/ch/g, 'چ'],
-    [/ng/g, 'ڠ'],
-    [/ny/g, 'ڽ'],
-
-    // Specific Nusantara sounds
-    [/p/g, 'ڤ'],
-    [/c/g, 'چ'],
-    [/g/g, 'ݢ'],
-
-    // Standard consonants
-    [/b/g, 'ب'],
-    [/j/g, 'ج'],
-    [/d/g, 'د'],
-    [/h/g, 'ه'],
-    [/w/g, 'و'],
-    [/z/g, 'ز'],
-    [/y/g, 'ي'],
-    [/k/g, 'ك'],
-    [/l/g, 'ل'],
-    [/m/g, 'م'],
-    [/n/g, 'ن'],
-    [/s/g, 'س'],
-    [/f/g, 'ف'],
-    [/v/g, 'ف'],
-    [/q/g, 'ق'],
-    [/r/g, 'ر'],
-    [/t/g, 'ت'],
-    [/x/g, 'كس'],
-
-    // Initial vowels
-    [/^a/g, 'ا'],
-    [/^i/g, 'إِ'],
-    [/^u/g, 'أُ'],
-    [/^e/g, 'إِ'],
-    [/^o/g, 'أُو'],
-    [/\s+a/g, ' ا'],
-    [/\s+i/g, ' إِ'],
-    [/\s+u/g, ' أُ'],
-    [/\s+e/g, ' إِ'],
-    [/\s+o/g, ' أُو'],
-
-    // Medial & final vowels
-    [/aa/g, 'ا'],
-    [/ai/g, 'اي'],
-    [/au/g, 'او'],
-    [/a/g, 'ا'],
-    [/i/g, 'ي'],
-    [/u/g, 'و'],
-    [/e/g, 'ي'],
-    [/o/g, 'و'],
-  ];
-
-  for (const [regex, repl] of rules) {
-    text = text.replace(regex, repl);
+  // If user directly entered Arabic text without Latin letters, preserve it cleanly
+  if (/[\u0600-\u06FF]/.test(trimmed) && !/[a-zA-Z]/.test(trimmed)) {
+    return trimmed.replace(/\s+/g, ' ');
   }
 
-  // Remove non-Arabic characters
-  text = text.replace(/[^\u0600-\u06FF\s]/g, '');
-  // Normalize double spaces
-  text = text.replace(/\s+/g, ' ').trim();
+  // Normalize Latin diacritics & punctuation
+  const normalized = trimmed
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[-–—/]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 
-  return text;
+  const words = normalized.split(' ').filter(Boolean);
+  const convertedWords: string[] = [];
+
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    if (/[\u0600-\u06FF]/.test(w)) {
+      convertedWords.push(w);
+      continue;
+    }
+
+    // Handle 'al-' prefix gracefully (e.g. al-hakim -> الحكيم)
+    if (w === 'al' && words[i + 1]) {
+      const nextWord = transliterateWordToArabMelayu(words[i + 1]);
+      if (nextWord) {
+        convertedWords.push('ال' + nextWord);
+        i += 1;
+        continue;
+      }
+    }
+
+    const res = transliterateWordToArabMelayu(w);
+    if (res) {
+      convertedWords.push(res);
+    }
+  }
+
+  return convertedWords.join(' ').trim();
 }
+
+export const transliterateLatinToArabMelayu = transliterateLatinToArabic;
 
 /**
  * Calculate simple Jumal Kabir value for an Arabic or Latin text

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   HistoricalDateInfo,
   ResearchAnnotation,
@@ -9,10 +9,21 @@ import {
   calculateSindhindPositions,
   generateSindhindHoroscopeAnalysis,
   ZODIAC_SIGNS,
-  PLANETS_INFO,
 } from './lib/sindhindEngine';
 import { getFullHistoricalDate } from './lib/calendarConverter';
 import { getStoredAnnotations } from './lib/annotationsStorage';
+import {
+  loadScheduledRituals,
+  saveScheduledRituals,
+  getRitualReminderTargetMs,
+  playRitualChime,
+  ScheduledRitual,
+} from './lib/manzilRitualEngine';
+import {
+  getSavedArabicFontId,
+  applyGlobalArabicFont,
+  GlobalArabicFontId,
+} from './lib/arabicFonts';
 import { AstrolabeSphere } from './components/AstrolabeSphere';
 import { EphemerisTable } from './components/EphemerisTable';
 import { CalendarConverterView } from './components/CalendarConverterView';
@@ -31,13 +42,23 @@ import { HisabJumalPasaranView } from './components/HisabJumalPasaranView';
 import { AmuletWafaqGeneratorView } from './components/AmuletWafaqGeneratorView';
 import { StarMapView } from './components/StarMapView';
 import { ManzilCalculatorView } from './components/ManzilCalculatorView';
+import { ManzilRitualSchedulerView } from './components/ManzilRitualSchedulerView';
 import { ManzilGlobe3DView } from './components/ManzilGlobe3DView';
 import { AstrolabeManzilPowerChart } from './components/AstrolabeManzilPowerChart';
+import { DashboardRingkasanView } from './components/DashboardRingkasanView';
 import { ExportPdfModal } from './components/ExportPdfModal';
 import { UserGuideModal } from './components/UserGuideModal';
+import { SharePublishModal } from './components/SharePublishModal';
 import { InteractiveCompassHeader } from './components/InteractiveCompassHeader';
+import { PWAInstallButton } from './components/PWAInstallButton';
+import { OfflineIndicator } from './components/OfflineIndicator';
 import {
   Compass,
+  Bell,
+  BellRing,
+  Menu,
+  X,
+  Share2,
   Moon,
   Sun,
   BookOpen,
@@ -70,6 +91,7 @@ export function App() {
     | 'starmap'
     | 'manzil3d'
     | 'manzil'
+    | 'ritual'
     | 'aspects'
     | 'transit'
     | 'progressions'
@@ -87,17 +109,118 @@ export function App() {
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('astrolabe');
   const [astrolabeViewMode, setAstrolabeViewMode] = useState<'both' | 'sphere' | 'power_chart'>('both');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
 
   // Night Mode state (persisted)
   const [theme, setTheme] = useState<ThemeMode>(() => {
     return (localStorage.getItem('sindhind_theme') as ThemeMode) || 'night';
   });
 
+  // Global Arabic font state (persisted)
+  const [arabicFontId, setArabicFontId] = useState<GlobalArabicFontId>(() =>
+    getSavedArabicFontId()
+  );
+  const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
+
+  // Keep Tailwind dark: variant and mobile status bar theme-color synchronized
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle('dark', theme === 'night');
+    const metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (metaTheme) {
+      metaTheme.setAttribute('content', theme === 'night' ? '#0a0d14' : '#f4efe4');
+    }
+  }, [theme]);
+
+  // Apply chosen global Arabic font CSS variable
+  useEffect(() => {
+    applyGlobalArabicFont(arabicFontId);
+  }, [arabicFontId]);
+
+  // Sync canonical link and og:url to runtime origin + pathname for s.id / social sharing
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const canonicalUrl = `${window.location.origin}${window.location.pathname}`;
+    let canonical = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
+    if (!canonical) {
+      canonical = document.createElement('link');
+      canonical.rel = 'canonical';
+      document.head.appendChild(canonical);
+    }
+    canonical.href = canonicalUrl;
+
+    let ogUrl = document.querySelector('meta[property="og:url"]') as HTMLMetaElement | null;
+    if (!ogUrl) {
+      ogUrl = document.createElement('meta');
+      ogUrl.setAttribute('property', 'og:url');
+      document.head.appendChild(ogUrl);
+    }
+    ogUrl.content = canonicalUrl;
+  }, []);
+
   const toggleTheme = () => {
     const next = theme === 'night' ? 'parchment' : 'night';
     setTheme(next);
     localStorage.setItem('sindhind_theme', next);
   };
+
+  // App-wide Ritual Reminder Watcher
+  const [scheduledRitualCount, setScheduledRitualCount] = useState<number>(() =>
+    loadScheduledRituals().filter((r) => r.enabled).length
+  );
+  const [activeRitualAlert, setActiveRitualAlert] = useState<ScheduledRitual | null>(null);
+
+  const refreshRitualCount = () => {
+    setScheduledRitualCount(loadScheduledRituals().filter((r) => r.enabled).length);
+  };
+
+  useEffect(() => {
+    const checkDueRituals = () => {
+      const items = loadScheduledRituals();
+      setScheduledRitualCount(items.filter((r) => r.enabled).length);
+      const now = Date.now();
+      let updated = false;
+
+      const nextItems = items.map((r) => {
+        if (!r.enabled) return r;
+        const targetMs = getRitualReminderTargetMs(r);
+        if (targetMs === null) return r;
+        const risingMs = targetMs + r.reminderMinutesBefore * 60 * 1000;
+        const notifKey = `${r.id}_${r.dateISO}_${r.risingTime}`;
+
+        if (now >= targetMs && now <= risingMs + 35 * 60 * 1000 && r.lastNotifiedKey !== notifKey) {
+          updated = true;
+          playRitualChime();
+          setActiveRitualAlert(r);
+
+          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+            try {
+              new Notification(
+                `Terbit Manzil #${r.manzilNumber} (${r.manzilTransliteration})`,
+                {
+                  body: `${r.title} • Jam terbit ${r.risingTime}–${r.windowEnd} • Planet: ${r.planetaryHour}`,
+                  tag: notifKey,
+                }
+              );
+            } catch {
+              // Some mobile browsers require ServiceWorkerRegistration.showNotification
+            }
+          }
+
+          return { ...r, lastNotifiedKey: notifKey };
+        }
+        return r;
+      });
+
+      if (updated) {
+        saveScheduledRituals(nextItems);
+      }
+    };
+
+    checkDueRituals();
+    const timer = window.setInterval(checkDueRituals, 15000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   // Synchronized Historical Date State
   const [dateState, setDateState] = useState(() => {
@@ -236,9 +359,45 @@ export function App() {
   const ascSign = ZODIAC_SIGNS[chartData.ascendant.signIndex];
   const analysis = generateSindhindHoroscopeAnalysis(chartData);
 
+  const navTabs: Array<{ id: ActiveTab; label: string; sub: string; icon: any; badge?: number }> = [
+    { id: 'astrolabe', label: 'فلك الأسطرلاب', sub: 'Astrolab', icon: Compass },
+    { id: 'orbits', label: 'مدارات الكواكب', sub: 'Orbit D3 (Helio/Geo)', icon: CircleDot },
+    { id: 'starmap', label: 'خريطة السماء', sub: 'Peta Langit & Manzil', icon: Globe2 },
+    { id: 'manzil3d', label: 'كرة المنازل 3D', sub: 'Manzil 3D Globe', icon: Globe },
+    { id: 'manzil', label: 'حاسبة المنازل', sub: 'Manzil Calculator', icon: Moon },
+    { id: 'ritual', label: 'أوقات الأوراد', sub: 'Ritual Manzil', icon: Bell, badge: scheduledRitualCount },
+    { id: 'aspects', label: 'أشكال الاتصالات', sub: 'Tabel Aspek & Matriks', icon: Layers },
+    { id: 'transit', label: 'حاسبة العبور', sub: 'Transit Calculator', icon: TrendingUp },
+    { id: 'progressions', label: 'التسيير الثانوي', sub: 'Progresi 50 Th', icon: Milestone },
+    { id: 'synastry', label: 'مصفوفة التوافق', sub: 'Synastry Matrix', icon: GitCompare },
+    { id: 'mawlayin', label: 'أحكام الموليين', sub: 'Pemerintahan & Sosial', icon: Landmark },
+    { id: 'weather', label: 'الأنواء والطقس', sub: 'Cuaca Musiman', icon: CloudRain },
+    { id: 'jumal', label: 'حساب الجمل والفال', sub: 'Hisab Jumal & Pasaran', icon: Hash },
+    { id: 'wafaq', label: 'طِلَسْم وَأَوْفَاق', sub: 'Amulet & Wafaq', icon: Shield },
+    { id: 'ephemeris', label: 'جدول الكواكب', sub: 'Ephemeris', icon: Sparkles },
+    { id: 'calendar', label: 'تحويل التواريخ', sub: 'Tarikh & Kalender', icon: Calendar },
+    { id: 'interpretation', label: 'أحكام النجوم', sub: 'Tafsir Astrologi', icon: Info },
+    { id: 'manuscripts', label: 'خزانة المخطوطات', sub: 'Arsip & API Naskah', icon: BookOpen },
+    { id: 'search', label: 'الفهرس الدلالي', sub: 'Indeks Semantik', icon: Search },
+    {
+      id: 'annotations',
+      label: 'التعليقات',
+      sub: `Anotasi (${annotations.length})`,
+      icon: Bookmark,
+    },
+  ];
+
+  const selectTabAndScrollTop = (tabId: ActiveTab) => {
+    setActiveTab(tabId);
+    setIsMobileMenuOpen(false);
+    if (window.innerWidth < 768) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
   return (
     <div
-      className={`min-h-screen font-sans transition-colors duration-200 ${
+      className={`min-h-screen font-sans transition-colors duration-200 flex flex-col ${
         isNight
           ? 'bg-[#0a0d14] text-[#e2d8c3]'
           : 'bg-[#f4efe4] text-[#2c2419]'
@@ -246,39 +405,42 @@ export function App() {
     >
       {/* Top Header / Astrological Banner */}
       <header
-        className={`sticky top-0 z-40 border-b backdrop-blur-md transition-colors ${
+        className={`sticky top-0 z-40 border-b backdrop-blur-md transition-colors pt-safe ${
           isNight
             ? 'bg-[#0f1422]/90 border-[#1f2a3f]'
             : 'bg-[#faf6ee]/90 border-[#dfd5be]'
         }`}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-          <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3">
+          <div className="flex items-center justify-between gap-2 sm:gap-4">
             {/* Title & Arabic Classical Inscription */}
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-[#c59a43]/20 border border-[#c59a43]/40 flex items-center justify-center text-[#c59a43] shadow-sm">
-                <Compass className="w-5 h-5 animate-pulse" />
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 shrink-0 rounded-xl bg-[#c59a43]/20 border border-[#c59a43]/40 flex items-center justify-center text-[#c59a43] shadow-sm">
+                <Compass className="w-4 h-4 sm:w-5 sm:h-5 animate-pulse" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <h1 className="font-serif font-bold text-lg tracking-wide text-[#c59a43]">
-                    علم النجوم • Zij as-Sindhind
+                  <h1 className="font-serif font-bold text-sm sm:text-lg text-[#c59a43] truncate">
+                    <span className="font-arabic text-base sm:text-xl font-bold">علم النجوم</span> • Zij as-Sindhind
                   </h1>
-                  <span className="text-[11px] px-2 py-0.5 rounded-full font-mono bg-current/10 border border-current/20 hidden sm:inline-block">
+                  <span className="text-xs px-2.5 py-0.5 rounded-full font-arabic bg-current/10 border border-current/20 hidden lg:inline-block shrink-0">
                     الزيج السندهند وأرجوزة النجوم
                   </span>
                 </div>
-                <p className="text-xs opacity-75 font-serif">
+                <p className="text-xs opacity-75 font-serif hidden sm:block truncate">
                   Hisab Ephemeris Falak Kuno, Kalender Klasik & Interpretasi Manuskrip
+                </p>
+                <p className="text-[10px] opacity-75 font-mono sm:hidden truncate">
+                  {historicalDate.hijri.day} {historicalDate.hijri.monthNameLatin} {historicalDate.hijri.year} H · {historicalDate.gregorian.day}/{historicalDate.gregorian.month} M
                 </p>
               </div>
             </div>
 
             {/* Quick Chronology Bar & Actions */}
-            <div className="flex items-center gap-2 sm:gap-4 text-xs">
+            <div className="flex items-center gap-1.5 sm:gap-3 text-xs shrink-0">
               {/* Synchronized Date Badge */}
               <div
-                onClick={() => setActiveTab('calendar')}
+                onClick={() => selectTabAndScrollTop('calendar')}
                 className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer transition-colors ${
                   isNight
                     ? 'bg-[#151c2e] hover:bg-[#1f2b44] border-[#25344f]'
@@ -303,7 +465,7 @@ export function App() {
                 observerLatitude={observerLocation.latitude}
                 observerLongitude={observerLocation.longitude}
                 observerName={observerLocation.name}
-                onSelectTab={(tab) => setActiveTab(tab)}
+                onSelectTab={(tab) => selectTabAndScrollTop(tab)}
                 onApplyHeadingToStarMap={(heading, syncLive) => {
                   setCompassHeading(heading);
                   setIsCompassSynced(syncLive);
@@ -314,77 +476,74 @@ export function App() {
               {/* User Guide Button */}
               <button
                 onClick={() => setIsUserGuideOpen(true)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors shadow-sm ${
+                className={`inline-flex items-center justify-center gap-1.5 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors shadow-sm ${
                   isNight
                     ? 'bg-[#151c2e] hover:bg-[#202c46] border-[#25344f] text-[#c59a43]'
                     : 'bg-[#ede5d5] hover:bg-[#e4dac6] border-[#dacdb2] text-[#825c1d]'
                 }`}
                 title="Buka Panduan Pengguna & Glosarium Falak"
+                aria-label="Panduan Pengguna"
               >
-                <HelpCircle className="w-3.5 h-3.5" />
+                <HelpCircle className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
                 <span className="hidden sm:inline">Panduan Pengguna</span>
+              </button>
+
+              {/* Install PWA Button (Android / iOS / Desktop) */}
+              <PWAInstallButton theme={theme} compact />
+
+              {/* Share / Publish s.id & Arabic Font Button */}
+              <button
+                onClick={() => setIsShareModalOpen(true)}
+                className={`inline-flex items-center justify-center gap-1.5 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors shadow-sm ${
+                  isNight
+                    ? 'bg-[#151c2e] hover:bg-[#202c46] border-emerald-500/35 text-emerald-300'
+                    : 'bg-[#ede5d5] hover:bg-[#e4dac6] border-emerald-600/35 text-emerald-800'
+                }`}
+                title="Publikasi s.id, Bagikan Tautan & Pilih Font Arab"
+                aria-label="Publikasi s.id dan Font Arab"
+              >
+                <Share2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                <span className="hidden xl:inline">s.id / Font</span>
               </button>
 
               {/* PDF Export Button */}
               <button
                 onClick={() => setIsPdfModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#c59a43] text-black hover:bg-[#d4a84e] transition-colors shadow-sm"
+                className="inline-flex items-center justify-center gap-1.5 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#c59a43] text-black hover:bg-[#d4a84e] transition-colors shadow-sm"
+                title="Ekspor PDF"
+                aria-label="Ekspor PDF"
               >
-                <FileDown className="w-3.5 h-3.5" />
+                <FileDown className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
                 <span className="hidden sm:inline">Ekspor PDF</span>
               </button>
 
               {/* Night Mode Toggle */}
               <button
                 onClick={toggleTheme}
-                className={`p-2 rounded-lg border transition-colors ${
+                className={`inline-flex items-center justify-center min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 p-2 rounded-lg border transition-colors ${
                   isNight
                     ? 'bg-[#151c2e] hover:bg-[#202c46] border-[#25344f] text-amber-400'
                     : 'bg-[#ede5d5] hover:bg-[#e4dac6] border-[#dacdb2] text-slate-700'
                 }`}
                 title={isNight ? 'Beralih ke Mode Kertas (Parchment)' : 'Beralih ke Mode Malam (Night Mode)'}
+                aria-label="Ubah Tema"
               >
                 {isNight ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               </button>
             </div>
           </div>
 
-          {/* Navigation Bar Tabs */}
-          <nav className="flex items-center gap-1 sm:gap-2 mt-3 pt-2 border-t border-current/10 overflow-x-auto no-scrollbar text-xs">
-            {[
-              { id: 'astrolabe', label: 'فلك الأسطرلاب', sub: 'Astrolab', icon: Compass },
-              { id: 'orbits', label: 'مدارات الكواكب', sub: 'Orbit D3 (Helio/Geo)', icon: CircleDot },
-              { id: 'starmap', label: 'خريطة السماء', sub: 'Peta Langit & Manzil', icon: Globe2 },
-              { id: 'manzil3d', label: 'كرة المنازل 3D', sub: 'Manzil 3D Globe', icon: Globe },
-              { id: 'manzil', label: 'حاسبة المنازل', sub: 'Manzil Calculator', icon: Moon },
-              { id: 'aspects', label: 'أشكال الاتصالات', sub: 'Tabel Aspek & Matriks', icon: Layers },
-              { id: 'transit', label: 'حاسبة العبور', sub: 'Transit Calculator', icon: TrendingUp },
-              { id: 'progressions', label: 'التسيير الثانوي', sub: 'Progresi 50 Th', icon: Milestone },
-              { id: 'synastry', label: 'مصفوفة التوافق', sub: 'Synastry Matrix', icon: GitCompare },
-              { id: 'mawlayin', label: 'أحكام الموليين', sub: 'Pemerintahan & Sosial', icon: Landmark },
-              { id: 'weather', label: 'الأنواء والطقس', sub: 'Cuaca Musiman', icon: CloudRain },
-              { id: 'jumal', label: 'حساب الجمل والفال', sub: 'Hisab Jumal & Pasaran', icon: Hash },
-              { id: 'wafaq', label: 'طِلَسْم وَأَوْفَاق', sub: 'Amulet & Wafaq', icon: Shield },
-              { id: 'ephemeris', label: 'جدول الكواكب', sub: 'Ephemeris', icon: Sparkles },
-              { id: 'calendar', label: 'تحويل التواريخ', sub: 'Tarikh & Kalender', icon: Calendar },
-              { id: 'interpretation', label: 'أحكام النجوم', sub: 'Tafsir Astrologi', icon: Info },
-              { id: 'manuscripts', label: 'خزانة المخطوطات', sub: 'Arsip & API Naskah', icon: BookOpen },
-              { id: 'search', label: 'الفهرس الدلالي', sub: 'Indeks Semantik', icon: Search },
-              {
-                id: 'annotations',
-                label: 'التعليقات',
-                sub: `Anotasi (${annotations.length})`,
-                icon: Bookmark,
-              },
-            ].map((tab) => {
+          {/* Desktop/Tablet Navigation Bar Tabs */}
+          <nav className="hidden md:flex items-center gap-1.5 mt-3 pt-2 border-t border-current/10 overflow-x-auto no-scrollbar text-xs">
+            {navTabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
 
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as ActiveTab)}
-                  className={`px-3 py-1.5 rounded-lg whitespace-nowrap font-serif transition-all flex items-center gap-1.5 ${
+                  onClick={() => selectTabAndScrollTop(tab.id)}
+                  className={`px-3 py-1.5 rounded-lg whitespace-nowrap shrink-0 font-serif transition-all flex items-center gap-1.5 ${
                     isActive
                       ? 'bg-[#c59a43] text-black font-bold shadow-sm'
                       : isNight
@@ -394,6 +553,15 @@ export function App() {
                 >
                   <Icon className="w-3.5 h-3.5 shrink-0" />
                   <span>{tab.sub}</span>
+                  {typeof tab.badge === 'number' && tab.badge > 0 && (
+                    <span
+                      className={`ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-mono tabular-nums ${
+                        isActive ? 'bg-black/20 text-black' : 'bg-emerald-500/20 text-emerald-400'
+                      }`}
+                    >
+                      {tab.badge}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -401,8 +569,81 @@ export function App() {
         </div>
       </header>
 
+      {/* Active Ritual Reminder Banner */}
+      {activeRitualAlert && (
+        <div className="max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-4">
+          <div
+            role="alert"
+            className={`rounded-2xl border p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg ${
+              isNight
+                ? 'bg-emerald-950/70 border-emerald-500/50 text-emerald-100'
+                : 'bg-emerald-50 border-emerald-400 text-emerald-950'
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0 animate-bounce">
+                <BellRing className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="font-serif font-bold text-sm">
+                  Pengingat Waktu Terbit Manzil #{activeRitualAlert.manzilNumber} ({activeRitualAlert.manzilTransliteration})
+                </div>
+                <p className="text-xs opacity-90 mt-0.5">
+                  Amalan: <span className="font-semibold">{activeRitualAlert.title}</span> • Jendela terbit{' '}
+                  <span className="font-mono font-bold tabular-nums">
+                    {activeRitualAlert.risingTime}–{activeRitualAlert.windowEnd}
+                  </span>{' '}
+                  • Planet: {activeRitualAlert.planetaryHour}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  selectTabAndScrollTop('ritual');
+                  setActiveRitualAlert(null);
+                }}
+                className="min-h-[44px] sm:min-h-0 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors"
+              >
+                Buka Penjadwal
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveRitualAlert(null)}
+                className="min-h-[44px] sm:min-h-0 px-3 py-2 rounded-xl border border-current/25 text-xs font-semibold hover:bg-current/10 transition-colors"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Content View Switcher */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-6 flex-1">
+        <DashboardRingkasanView
+          chartData={chartData}
+          currentDateInfo={historicalDate}
+          theme={theme}
+          activeTab={activeTab}
+          onNavigateTab={(tab) => setActiveTab(tab as ActiveTab)}
+          onSelectDateStep={handleDateHoursOffset}
+          onResetToNow={() => {
+            const now = new Date();
+            applyNewDate(
+              now.getFullYear(),
+              now.getMonth() + 1,
+              now.getDate(),
+              now.getHours(),
+              now.getMinutes()
+            );
+          }}
+          compassHeading={compassHeading}
+          isCompassSynced={isCompassSynced}
+          onToggleCompassSync={(synced) => setIsCompassSynced(synced)}
+        />
+
         {activeTab === 'astrolabe' && (
           <div className="space-y-6">
             {/* View Mode Selector in Astrolabe Area */}
@@ -588,7 +829,19 @@ export function App() {
               handleOpenAnnotation('horoscope', 'manzil', `${title}\n\n${content}`)
             }
             onSelectDateStep={handleDateHoursOffset}
-            onNavigateToWafaq={() => setActiveTab('wafaq')}
+            onNavigateToWafaq={() => selectTabAndScrollTop('wafaq')}
+          />
+        )}
+
+        {activeTab === 'ritual' && (
+          <ManzilRitualSchedulerView
+            currentDateInfo={historicalDate}
+            observerLocation={observerLocation}
+            theme={theme}
+            onAnnotate={(title, content) =>
+              handleOpenAnnotation('horoscope', 'ritual', `${title}\n\n${content}`)
+            }
+            onSchedulesChanged={refreshRitualCount}
           />
         )}
 
@@ -744,7 +997,7 @@ export function App() {
       </main>
 
       {/* Global Application Footer */}
-      <footer className="border-t border-[#dacdb2]/60 dark:border-[#25344f] bg-[#f7f2e7]/90 dark:bg-[#0c101a]/95 backdrop-blur-md py-6 px-4 sm:px-8 mt-auto">
+      <footer className="border-t border-[#dacdb2]/60 dark:border-[#25344f] bg-[#f7f2e7]/90 dark:bg-[#0c101a]/95 backdrop-blur-md pt-6 pb-24 md:pb-6 px-4 sm:px-8 mt-auto">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="text-center sm:text-left space-y-1">
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
@@ -760,12 +1013,12 @@ export function App() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-center gap-2">
             <a
               href="https://wa.me/6281915949627"
               target="_blank"
               rel="noopener noreferrer"
-              className="px-3 py-1.5 rounded-xl bg-emerald-600/15 hover:bg-emerald-600/25 text-emerald-800 dark:text-emerald-300 border border-emerald-600/30 text-xs font-semibold transition-all active:scale-95"
+              className="min-h-[44px] sm:min-h-0 inline-flex items-center px-3 py-2 sm:py-1.5 rounded-xl bg-emerald-600/15 hover:bg-emerald-600/25 text-emerald-800 dark:text-emerald-300 border border-emerald-600/30 text-xs font-semibold transition-all active:scale-95"
             >
               WhatsApp 1 (+6281915949627)
             </a>
@@ -773,7 +1026,7 @@ export function App() {
               href="https://wa.me/6285239163085"
               target="_blank"
               rel="noopener noreferrer"
-              className="px-3 py-1.5 rounded-xl bg-emerald-600/15 hover:bg-emerald-600/25 text-emerald-800 dark:text-emerald-300 border border-emerald-600/30 text-xs font-semibold transition-all active:scale-95"
+              className="min-h-[44px] sm:min-h-0 inline-flex items-center px-3 py-2 sm:py-1.5 rounded-xl bg-emerald-600/15 hover:bg-emerald-600/25 text-emerald-800 dark:text-emerald-300 border border-emerald-600/30 text-xs font-semibold transition-all active:scale-95"
             >
               WhatsApp 2 (+6285239163085)
             </a>
@@ -781,11 +1034,152 @@ export function App() {
         </div>
       </footer>
 
+      {/* Android & iOS Mobile Bottom Navigation Bar */}
+      <nav
+        aria-label="Navigasi Cepat Seluler"
+        className={`md:hidden fixed bottom-0 inset-x-0 z-40 border-t backdrop-blur-lg pb-safe ${
+          isNight
+            ? 'bg-[#0f1422]/95 border-[#24324d] text-[#cbd5e1]'
+            : 'bg-[#faf6ee]/95 border-[#dacdb2] text-[#4a3f31]'
+        }`}
+      >
+        <div className="grid grid-cols-5 items-stretch max-w-lg mx-auto">
+          {[
+            { id: 'astrolabe' as ActiveTab, label: 'Astrolab', icon: Compass },
+            { id: 'manzil' as ActiveTab, label: 'Manzil', icon: Moon },
+            { id: 'ritual' as ActiveTab, label: 'Ritual', icon: Bell, badge: scheduledRitualCount },
+            { id: 'wafaq' as ActiveTab, label: 'Wafaq', icon: Shield },
+          ].map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id && !isMobileMenuOpen;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => selectTabAndScrollTop(item.id)}
+                className={`relative flex flex-col items-center justify-center gap-0.5 min-h-[54px] px-1 py-1.5 text-[11px] font-medium transition-colors active:scale-95 ${
+                  isActive
+                    ? 'text-[#c59a43] font-bold'
+                    : 'opacity-75 hover:opacity-100'
+                }`}
+              >
+                <div className="relative">
+                  <Icon className="w-5 h-5" />
+                  {typeof item.badge === 'number' && item.badge > 0 && (
+                    <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-emerald-500 text-white text-[9px] font-mono font-bold flex items-center justify-center tabular-nums">
+                      {item.badge}
+                    </span>
+                  )}
+                </div>
+                <span className="truncate max-w-full">{item.label}</span>
+                {isActive && (
+                  <span className="absolute top-0 inset-x-3 h-0.5 rounded-full bg-[#c59a43]" />
+                )}
+              </button>
+            );
+          })}
+
+          <button
+            type="button"
+            onClick={() => setIsMobileMenuOpen((prev) => !prev)}
+            className={`relative flex flex-col items-center justify-center gap-0.5 min-h-[54px] px-1 py-1.5 text-[11px] font-medium transition-colors active:scale-95 ${
+              isMobileMenuOpen ? 'text-[#c59a43] font-bold' : 'opacity-75 hover:opacity-100'
+            }`}
+            aria-expanded={isMobileMenuOpen}
+            aria-label="Buka semua modul falak"
+          >
+            {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            <span>Semua</span>
+          </button>
+        </div>
+      </nav>
+
+      {/* Mobile "Semua Modul" Bottom Sheet Drawer */}
+      {isMobileMenuOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end"
+          onClick={() => setIsMobileMenuOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className={`w-full max-h-[82vh] rounded-t-3xl border-t shadow-2xl flex flex-col pb-safe ${
+              isNight
+                ? 'bg-[#101626] border-[#273654] text-[#e2d8c3]'
+                : 'bg-[#faf6ee] border-[#dacdb2] text-[#2c2419]'
+            }`}
+          >
+            <div className="flex items-center justify-between px-4 py-3.5 border-b border-current/10">
+              <div>
+                <h2 className="font-serif font-bold text-sm text-[#c59a43]">
+                  Daftar Modul Zij as-Sindhind (20 Modul)
+                </h2>
+                <p className="text-[11px] opacity-75 font-mono">
+                  {historicalDate.hijri.day} {historicalDate.hijri.monthNameLatin} {historicalDate.hijri.year} H · {observerLocation.name}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="min-h-[44px] min-w-[44px] rounded-xl flex items-center justify-center border border-current/15 hover:bg-current/10"
+                aria-label="Tutup daftar modul"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto p-3 grid grid-cols-2 gap-2">
+              {navTabs.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => selectTabAndScrollTop(tab.id)}
+                    className={`min-h-[52px] p-2.5 rounded-xl border text-left transition-all flex items-center gap-2.5 active:scale-[0.98] ${
+                      isActive
+                        ? 'bg-[#c59a43] text-black border-[#c59a43] font-bold shadow-sm'
+                        : isNight
+                        ? 'bg-[#151e32] border-[#25344f] text-[#e2d8c3]'
+                        : 'bg-[#f1e9d9] border-[#dacdb2] text-[#2c2419]'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-serif leading-tight truncate">{tab.sub}</div>
+                      <div className="text-[10px] opacity-70 font-arabic truncate">{tab.label}</div>
+                    </div>
+                    {typeof tab.badge === 'number' && tab.badge > 0 && (
+                      <span
+                        className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono tabular-nums ${
+                          isActive ? 'bg-black/20 text-black' : 'bg-emerald-500/20 text-emerald-400'
+                        }`}
+                      >
+                        {tab.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Share / s.id Publish & Arabic Font Modal */}
+      <SharePublishModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        theme={theme}
+        arabicFontId={arabicFontId}
+        onChangeArabicFont={(fontId) => setArabicFontId(fontId)}
+      />
+
       {/* User Guide Modal */}
       <UserGuideModal
         isOpen={isUserGuideOpen}
         onClose={() => setIsUserGuideOpen(false)}
-        onNavigateToTab={(tabId) => setActiveTab(tabId as ActiveTab)}
+        onNavigateToTab={(tabId) => selectTabAndScrollTop(tabId as ActiveTab)}
         theme={theme}
       />
 
@@ -802,6 +1196,9 @@ export function App() {
         annotations={annotations}
         theme={theme}
       />
+
+      {/* Offline Status Toast */}
+      <OfflineIndicator />
     </div>
   );
 }

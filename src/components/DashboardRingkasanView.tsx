@@ -936,7 +936,7 @@ export const DashboardRingkasanView: React.FC<DashboardRingkasanViewProps> = ({
                     </div>
 
                     <p className="text-xs opacity-85 leading-relaxed font-serif">
-                      Gugus Bintang: <strong>{activeManzil.mansion.starGroup}</strong> • Tabi'at: <strong>{activeManzil.mansion.temperament}</strong> • Makna: <em>{activeManzil.mansion.meaningIndonesian}</em>
+                      Gugus Bintang: <strong>{activeManzil.mansion.starGroup}</strong> • Tabi'at: <strong>{activeManzil.mansion.temperament}</strong> • Makna: <em>{activeManzil.mansion.meaningId}</em>
                     </p>
 
                     {/* Progress Bar within mansion */}
@@ -963,7 +963,7 @@ export const DashboardRingkasanView: React.FC<DashboardRingkasanViewProps> = ({
                     <button
                       type="button"
                       onClick={() => onNavigateTab('manzil')}
-                      className="w-full inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl font-serif font-bold text-xs bg-[#c59a43] hover:bg-[#d4af37] text-black shadow-md transition-all active:scale-95"
+                      className="w-full min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl font-serif font-bold text-xs bg-[#c59a43] hover:bg-[#d4af37] text-black shadow-md transition-all active:scale-95"
                     >
                       <Moon className="w-3.5 h-3.5" />
                       <span>Buka Manzil Detail &amp; Kalender</span>
@@ -971,8 +971,21 @@ export const DashboardRingkasanView: React.FC<DashboardRingkasanViewProps> = ({
 
                     <button
                       type="button"
+                      onClick={() => onNavigateTab('ritual')}
+                      className={`w-full min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl font-serif font-semibold text-xs border transition-all active:scale-95 ${
+                        isNight
+                          ? 'bg-[#182338] border-[#293a55] text-emerald-300 hover:bg-[#202f48]'
+                          : 'bg-white border-[#ded3be] text-emerald-800 hover:bg-[#f2e9db]'
+                      }`}
+                    >
+                      <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Penjadwal Ritual Terbit</span>
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={() => onNavigateTab('wafaq')}
-                      className={`w-full inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl font-serif font-semibold text-xs border transition-all ${
+                      className={`w-full min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl font-serif font-semibold text-xs border transition-all active:scale-95 ${
                         isNight
                           ? 'bg-[#182338] border-[#293a55] text-amber-300 hover:bg-[#202f48]'
                           : 'bg-white border-[#ded3be] text-stone-800 hover:bg-[#f2e9db]'
@@ -985,7 +998,7 @@ export const DashboardRingkasanView: React.FC<DashboardRingkasanViewProps> = ({
                     <button
                       type="button"
                       onClick={() => onNavigateTab('manzil3d')}
-                      className={`w-full inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl font-serif font-semibold text-xs border transition-all ${
+                      className={`w-full min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl font-serif font-semibold text-xs border transition-all active:scale-95 ${
                         isNight
                           ? 'bg-[#182338] border-[#293a55] text-sky-300 hover:bg-[#202f48]'
                           : 'bg-white border-[#ded3be] text-sky-800 hover:bg-[#f2e9db]'

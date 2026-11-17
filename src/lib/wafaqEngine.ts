@@ -15,6 +15,136 @@ export type WafaqGridType = '3x3' | '4x4' | 'circle';
 export type NumeralStyle = 'arabic' | 'abjad' | 'latin';
 export type AmuletThemeId = 'parchment' | 'midnight_gold' | 'saffron_ruby' | 'emerald_sufi';
 export type HajatPurpose = 'protection' | 'wealth' | 'love' | 'wisdom' | 'prestige';
+export type InkColorId = 'theme_default' | 'zaafaran' | 'misk_hitam' | 'dhahab' | 'zumurrud' | 'lazuward' | 'perak' | 'custom';
+export type CalligraphyStyleId = 'naskh' | 'thuluth' | 'kufi' | 'ruqah';
+
+export interface InkColorConfig {
+  id: InkColorId;
+  name: string;
+  nameArabic: string;
+  primaryHex: string;
+  secondaryHex: string;
+  glowRgba: string;
+  particleColors: string[];
+  description: string;
+}
+
+export const INK_COLOR_PRESETS: Record<Exclude<InkColorId, 'theme_default' | 'custom'>, InkColorConfig> = {
+  zaafaran: {
+    id: 'zaafaran',
+    name: 'Tinta Za\'faran & Air Mawar',
+    nameArabic: 'مِدَادُ الزَّعْفَرَان',
+    primaryHex: '#9a3412',
+    secondaryHex: '#c2410c',
+    glowRgba: 'rgba(194, 65, 12, 0.72)',
+    particleColors: ['#ea580c', '#d97706', '#9a3412', '#fbbf24'],
+    description: 'Racikan tradisional sari bunga kuma-kuma, air mawar, dan misik.',
+  },
+  misk_hitam: {
+    id: 'misk_hitam',
+    name: 'Tinta Misik Hitam Pekat',
+    nameArabic: 'حِبْرُ المِسْكِ الأَسْوَد',
+    primaryHex: '#1c1917',
+    secondaryHex: '#44403c',
+    glowRgba: 'rgba(68, 64, 60, 0.65)',
+    particleColors: ['#292524', '#57534e', '#78716c', '#a8a29e'],
+    description: 'Tinta jelaga murni dan getah Arab untuk ketegasan manuskrip kitab.',
+  },
+  dhahab: {
+    id: 'dhahab',
+    name: 'Tinta Emas Cair (Dhahab)',
+    nameArabic: 'مَاءُ الذَّهَب',
+    primaryHex: '#b48314',
+    secondaryHex: '#eab308',
+    glowRgba: 'rgba(250, 204, 21, 0.85)',
+    particleColors: ['#fef08a', '#facc15', '#d97706', '#ffffff'],
+    description: 'Sepuhan emas murni (*Tadhhib*) untuk lembaran keraton dan lempeng.',
+  },
+  zumurrud: {
+    id: 'zumurrud',
+    name: 'Tinta Zamrud Hijau',
+    nameArabic: 'مِدَادُ الزُّمُرُّد',
+    primaryHex: '#047857',
+    secondaryHex: '#10b981',
+    glowRgba: 'rgba(16, 185, 129, 0.72)',
+    particleColors: ['#34d399', '#10b981', '#059669', '#a7f3d0'],
+    description: 'Pigmen malakit hijau zamrud melambangkan kesuburan & ketenangan.',
+  },
+  lazuward: {
+    id: 'lazuward',
+    name: 'Tinta Lazuward (Biru Langit)',
+    nameArabic: 'لَازُوَرْدٌ سَمَاوِيّ',
+    primaryHex: '#1d4ed8',
+    secondaryHex: '#38bdf8',
+    glowRgba: 'rgba(56, 189, 248, 0.75)',
+    particleColors: ['#60a5fa', '#38bdf8', '#2563eb', '#bae6fd'],
+    description: 'Pigmen batu lapis lazuli klasik untuk kaligrafi falakiah.',
+  },
+  perak: {
+    id: 'perak',
+    name: 'Tinta Perak / Putih Gading',
+    nameArabic: 'مَاءُ الفِضَّة',
+    primaryHex: '#e2e8f0',
+    secondaryHex: '#94a3b8',
+    glowRgba: 'rgba(226, 232, 240, 0.85)',
+    particleColors: ['#f8fafc', '#cbd5e1', '#94a3b8', '#ffffff'],
+    description: 'Kontras tinggi dan bercahaya di atas batu akik hitam maupun media gelap.',
+  },
+};
+
+export interface CalligraphyStyleConfig {
+  id: CalligraphyStyleId;
+  name: string;
+  nameArabic: string;
+  fontFamily: string;
+  fontWeight: string;
+  fontStyle: string;
+  scaleFactor: number;
+  letterStyleNote: string;
+}
+
+export const CALLIGRAPHY_STYLES: Record<CalligraphyStyleId, CalligraphyStyleConfig> = {
+  naskh: {
+    id: 'naskh',
+    name: 'Khat Naskh',
+    nameArabic: 'خَطُّ النَّسْخ',
+    fontFamily: '"Noto Naskh Arabic", "Scheherazade New", "Amiri", serif',
+    fontWeight: '700',
+    fontStyle: 'normal',
+    scaleFactor: 1.0,
+    letterStyleNote: 'Proporsional, jernih, dan seimbang sebagaimana naskah turats klasik.',
+  },
+  thuluth: {
+    id: 'thuluth',
+    name: 'Khat Thuluth',
+    nameArabic: 'خَطُّ الثُّلُث',
+    fontFamily: '"Amiri", "Scheherazade New", serif',
+    fontWeight: '700',
+    fontStyle: 'italic',
+    scaleFactor: 1.1,
+    letterStyleNote: 'Agung, menjulang, dan melengkung berwibawa untuk prasasti utama.',
+  },
+  kufi: {
+    id: 'kufi',
+    name: 'Khat Kufi',
+    nameArabic: 'الخَطُّ الكُوفِيّ',
+    fontFamily: '"Reem Kufi", "Noto Kufi Arabic", serif',
+    fontWeight: '700',
+    fontStyle: 'normal',
+    scaleFactor: 0.94,
+    letterStyleNote: 'Geometris tegas dan bersudut rapi untuk ukiran batu serta logam.',
+  },
+  ruqah: {
+    id: 'ruqah',
+    name: 'Khat Riq\'ah',
+    nameArabic: 'خَطُّ الرُّقْعَة',
+    fontFamily: '"Aref Ruqaa", "Amiri", serif',
+    fontWeight: '700',
+    fontStyle: 'normal',
+    scaleFactor: 1.05,
+    letterStyleNote: 'Goresan pena kalam yang luwes, dinamis, dan artistik.',
+  },
+};
 
 export interface AmuletThemeConfig {
   id: AmuletThemeId;
@@ -465,6 +595,10 @@ export interface GeneratedAmuletData {
   manzil: DetailedManzil;
   hajat: HajatDetail;
   theme: AmuletThemeConfig;
+  inkColorId: InkColorId;
+  customInkHex: string;
+  inkColor: InkColorConfig;
+  calligraphyStyle: CalligraphyStyleConfig;
   gridType: WafaqGridType;
   numeralStyle: NumeralStyle;
   customPersonName: string;
@@ -511,6 +645,9 @@ export function generateAmuletData({
   numeralStyle,
   personName = '',
   personNameArabic = '',
+  inkColorId = 'theme_default',
+  customInkHex = '#9a3412',
+  calligraphyStyleId = 'naskh',
 }: {
   manzilNumber: number;
   hajatId: HajatPurpose;
@@ -519,11 +656,43 @@ export function generateAmuletData({
   numeralStyle: NumeralStyle;
   personName?: string;
   personNameArabic?: string;
+  inkColorId?: InkColorId;
+  customInkHex?: string;
+  calligraphyStyleId?: CalligraphyStyleId;
 }): GeneratedAmuletData {
   const index = Math.min(27, Math.max(0, manzilNumber - 1));
   const manzil = MANZIL_DETAILED_DATA[index];
   const hajat = HAJAT_PRESETS[hajatId] || HAJAT_PRESETS.protection;
   const theme = AMULET_THEMES[themeId] || AMULET_THEMES.parchment;
+  const calligraphyStyle = CALLIGRAPHY_STYLES[calligraphyStyleId] || CALLIGRAPHY_STYLES.naskh;
+
+  let inkColor: InkColorConfig;
+  if (inkColorId === 'theme_default') {
+    inkColor = {
+      id: 'theme_default',
+      name: 'Sesuai Tema / Media',
+      nameArabic: 'حَسَبَ اللَّوْح',
+      primaryHex: theme.primaryText,
+      secondaryHex: theme.accentText,
+      glowRgba: 'rgba(212, 175, 55, 0.72)',
+      particleColors: [theme.goldAccent, theme.accentText, theme.primaryBorder, '#ffffff'],
+      description: 'Menyesuaikan pigmen tinta secara otomatis dengan tema dan media dasar.',
+    };
+  } else if (inkColorId === 'custom') {
+    const cleanHex = /^#[0-9a-fA-F]{6}$/.test(customInkHex) ? customInkHex : '#9a3412';
+    inkColor = {
+      id: 'custom',
+      name: 'Warna Tinta Kustom',
+      nameArabic: 'لَوْنٌ مُخَصَّص',
+      primaryHex: cleanHex,
+      secondaryHex: cleanHex,
+      glowRgba: `${cleanHex}b3`,
+      particleColors: [cleanHex, '#fbbf24', '#ffffff'],
+      description: 'Warna tinta pilihan khusus untuk personalisasi goresan Wafaq.',
+    };
+  } else {
+    inkColor = INK_COLOR_PRESETS[inkColorId] || INK_COLOR_PRESETS.zaafaran;
+  }
 
   // Calculate Jumal of Manzil Name
   const manzilJumalValue = calculateSimpleJumal(manzil.arabicName) || manzil.number * 27;
@@ -566,6 +735,10 @@ export function generateAmuletData({
     manzil,
     hajat,
     theme,
+    inkColorId,
+    customInkHex,
+    inkColor,
+    calligraphyStyle,
     gridType,
     numeralStyle,
     customPersonName: personName,

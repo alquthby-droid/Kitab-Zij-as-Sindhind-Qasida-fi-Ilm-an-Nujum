@@ -23,7 +23,7 @@ import {
   PartnerInput,
   CompatibilityReport,
 } from '../lib/compatibilityEngine';
-import { DayKey, PasaranKey, SAPTA_WARA, PANCA_WARA } from '../lib/hisabJumalEngine';
+import { DayKey, PasaranKey, SAPTA_WARA, PANCA_WARA, transliterateLatinToArabic } from '../lib/hisabJumalEngine';
 
 interface PartnerCompatibilitySubViewProps {
   theme: 'night' | 'parchment';
@@ -64,17 +64,21 @@ export const PartnerCompatibilitySubView: React.FC<PartnerCompatibilitySubViewPr
 
   // Partner 1 State (Pria / Calon Pertama)
   const [p1Name, setP1Name] = useState<string>('Muhammad Ali');
-  const [p1Arabic, setP1Arabic] = useState<string>('مُحَمَّد عَلِيّ');
+  const [p1Arabic, setP1Arabic] = useState<string>('محمد علي');
+  const [p1ManualArabic, setP1ManualArabic] = useState<boolean>(false);
   const [p1Mother, setP1Mother] = useState<string>('Aminah');
-  const [p1MotherArabic, setP1MotherArabic] = useState<string>('آمِنَة');
+  const [p1MotherArabic, setP1MotherArabic] = useState<string>('آمنة');
+  const [p1ManualMotherArabic, setP1ManualMotherArabic] = useState<boolean>(false);
   const [p1Day, setP1Day] = useState<DayKey>('jumat');
   const [p1Pasaran, setP1Pasaran] = useState<PasaranKey>('legi');
 
   // Partner 2 State (Wanita / Calon Kedua)
   const [p2Name, setP2Name] = useState<string>('Siti Fatimah');
-  const [p2Arabic, setP2Arabic] = useState<string>('سِتِّي فَاطِمَة');
+  const [p2Arabic, setP2Arabic] = useState<string>('سيتي فاطمة');
+  const [p2ManualArabic, setP2ManualArabic] = useState<boolean>(false);
   const [p2Mother, setP2Mother] = useState<string>('Khadijah');
-  const [p2MotherArabic, setP2MotherArabic] = useState<string>('خَدِيجَة');
+  const [p2MotherArabic, setP2MotherArabic] = useState<string>('خديجة');
+  const [p2ManualMotherArabic, setP2ManualMotherArabic] = useState<boolean>(false);
   const [p2Day, setP2Day] = useState<DayKey>('ahad');
   const [p2Pasaran, setP2Pasaran] = useState<PasaranKey>('pon');
 
@@ -107,12 +111,14 @@ export const PartnerCompatibilitySubView: React.FC<PartnerCompatibilitySubViewPr
     const found = PRESET_COUPLES.find((c) => c.id === presetId);
     if (!found) return;
     setP1Name(found.p1.name);
-    setP1Arabic(found.p1.nameArabic || found.p1.name);
+    setP1Arabic(found.p1.nameArabic || transliterateLatinToArabic(found.p1.name));
+    setP1ManualArabic(false);
     setP1Day(found.p1.day);
     setP1Pasaran(found.p1.pasaran);
 
     setP2Name(found.p2.name);
-    setP2Arabic(found.p2.nameArabic || found.p2.name);
+    setP2Arabic(found.p2.nameArabic || transliterateLatinToArabic(found.p2.name));
+    setP2ManualArabic(false);
     setP2Day(found.p2.day);
     setP2Pasaran(found.p2.pasaran);
   };
@@ -226,23 +232,52 @@ SKOR KESERASIAN: ${report.harmonyScore}% (${report.qualityTier})
               <input
                 type="text"
                 value={p1Name}
-                onChange={(e) => setP1Name(e.target.value)}
-                className="w-full text-xs font-medium px-3 py-2 rounded-xl border border-[#dacdb2] dark:border-[#25344f] bg-white dark:bg-[#0c1222] text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-rose-500"
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setP1Name(val);
+                  if (!p1ManualArabic) {
+                    setP1Arabic(transliterateLatinToArabic(val));
+                  }
+                }}
+                className="w-full min-h-[40px] text-xs font-medium px-3 py-2 rounded-xl border border-[#dacdb2] dark:border-[#25344f] bg-white dark:bg-[#0c1222] text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-rose-500"
                 placeholder="cth: Muhammad Ali"
               />
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-stone-700 dark:text-stone-300 block mb-1">
-                Lafaz Arab / Pegon:
-              </label>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <label className="text-xs font-semibold text-stone-700 dark:text-stone-300">
+                  Lafaz Arab Melayu / Pegon:
+                </label>
+                {p1ManualArabic ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setP1ManualArabic(false);
+                      setP1Arabic(transliterateLatinToArabic(p1Name));
+                    }}
+                    className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-0.5"
+                  >
+                    <RotateCcw className="w-2.5 h-2.5" />
+                    <span>Auto Melayu</span>
+                  </button>
+                ) : (
+                  <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400">
+                    Otomatis
+                  </span>
+                )}
+              </div>
               <input
                 type="text"
                 dir="rtl"
                 value={p1Arabic}
-                onChange={(e) => setP1Arabic(e.target.value)}
-                className="w-full text-sm font-arabic font-bold px-3 py-1.5 rounded-xl border border-[#dacdb2] dark:border-[#25344f] bg-white dark:bg-[#0c1222] text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-rose-500"
-                placeholder="مُحَمَّد عَلِيّ"
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setP1Arabic(val);
+                  setP1ManualArabic(val.trim().length > 0);
+                }}
+                className="w-full min-h-[42px] text-base font-arabic font-bold px-3 py-1.5 rounded-xl border border-[#dacdb2] dark:border-[#25344f] bg-white dark:bg-[#0c1222] text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-rose-500"
+                placeholder="محمد علي"
               />
             </div>
 
@@ -254,22 +289,46 @@ SKOR KESERASIAN: ${report.harmonyScore}% (${report.qualityTier})
                 <input
                   type="text"
                   value={p1Mother}
-                  onChange={(e) => setP1Mother(e.target.value)}
-                  className="w-full text-xs px-2.5 py-1.5 rounded-xl border border-[#dacdb2] dark:border-[#25344f] bg-white dark:bg-[#0c1222] text-stone-900 dark:text-stone-100"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setP1Mother(val);
+                    if (!p1ManualMotherArabic) {
+                      setP1MotherArabic(transliterateLatinToArabic(val));
+                    }
+                  }}
+                  className="w-full min-h-[38px] text-xs px-2.5 py-1.5 rounded-xl border border-[#dacdb2] dark:border-[#25344f] bg-white dark:bg-[#0c1222] text-stone-900 dark:text-stone-100"
                   placeholder="Nama Ibu Kandung"
                 />
               </div>
               <div>
-                <label className="text-[11px] font-semibold text-stone-700 dark:text-stone-300 block mb-1">
-                  Arab Nama Ibu:
-                </label>
+                <div className="flex items-center justify-between gap-1 mb-1">
+                  <label className="text-[11px] font-semibold text-stone-700 dark:text-stone-300">
+                    Arab Nama Ibu:
+                  </label>
+                  {p1ManualMotherArabic && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setP1ManualMotherArabic(false);
+                        setP1MotherArabic(transliterateLatinToArabic(p1Mother));
+                      }}
+                      className="text-[10px] text-rose-500 hover:underline"
+                    >
+                      Auto
+                    </button>
+                  )}
+                </div>
                 <input
                   type="text"
                   dir="rtl"
                   value={p1MotherArabic}
-                  onChange={(e) => setP1MotherArabic(e.target.value)}
-                  className="w-full text-xs font-arabic px-2.5 py-1.5 rounded-xl border border-[#dacdb2] dark:border-[#25344f] bg-white dark:bg-[#0c1222] text-stone-900 dark:text-stone-100"
-                  placeholder="آمِنَة"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setP1MotherArabic(val);
+                    setP1ManualMotherArabic(val.trim().length > 0);
+                  }}
+                  className="w-full min-h-[38px] text-sm font-arabic px-2.5 py-1.5 rounded-xl border border-[#dacdb2] dark:border-[#25344f] bg-white dark:bg-[#0c1222] text-stone-900 dark:text-stone-100"
+                  placeholder="آمنة"
                 />
               </div>
             </div>
@@ -354,23 +413,52 @@ SKOR KESERASIAN: ${report.harmonyScore}% (${report.qualityTier})
               <input
                 type="text"
                 value={p2Name}
-                onChange={(e) => setP2Name(e.target.value)}
-                className="w-full text-xs font-medium px-3 py-2 rounded-xl border border-[#dacdb2] dark:border-[#25344f] bg-white dark:bg-[#0c1222] text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-rose-500"
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setP2Name(val);
+                  if (!p2ManualArabic) {
+                    setP2Arabic(transliterateLatinToArabic(val));
+                  }
+                }}
+                className="w-full min-h-[40px] text-xs font-medium px-3 py-2 rounded-xl border border-[#dacdb2] dark:border-[#25344f] bg-white dark:bg-[#0c1222] text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-rose-500"
                 placeholder="cth: Siti Fatimah"
               />
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-stone-700 dark:text-stone-300 block mb-1">
-                Lafaz Arab / Pegon:
-              </label>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <label className="text-xs font-semibold text-stone-700 dark:text-stone-300">
+                  Lafaz Arab Melayu / Pegon:
+                </label>
+                {p2ManualArabic ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setP2ManualArabic(false);
+                      setP2Arabic(transliterateLatinToArabic(p2Name));
+                    }}
+                    className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-0.5"
+                  >
+                    <RotateCcw className="w-2.5 h-2.5" />
+                    <span>Auto Melayu</span>
+                  </button>
+                ) : (
+                  <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400">
+                    Otomatis
+                  </span>
+                )}
+              </div>
               <input
                 type="text"
                 dir="rtl"
                 value={p2Arabic}
-                onChange={(e) => setP2Arabic(e.target.value)}
-                className="w-full text-sm font-arabic font-bold px-3 py-1.5 rounded-xl border border-[#dacdb2] dark:border-[#25344f] bg-white dark:bg-[#0c1222] text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-rose-500"
-                placeholder="سِتِّي فَاطِمَة"
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setP2Arabic(val);
+                  setP2ManualArabic(val.trim().length > 0);
+                }}
+                className="w-full min-h-[42px] text-base font-arabic font-bold px-3 py-1.5 rounded-xl border border-[#dacdb2] dark:border-[#25344f] bg-white dark:bg-[#0c1222] text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-rose-500"
+                placeholder="سيتي فاطمة"
               />
             </div>
 
@@ -382,22 +470,46 @@ SKOR KESERASIAN: ${report.harmonyScore}% (${report.qualityTier})
                 <input
                   type="text"
                   value={p2Mother}
-                  onChange={(e) => setP2Mother(e.target.value)}
-                  className="w-full text-xs px-2.5 py-1.5 rounded-xl border border-[#dacdb2] dark:border-[#25344f] bg-white dark:bg-[#0c1222] text-stone-900 dark:text-stone-100"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setP2Mother(val);
+                    if (!p2ManualMotherArabic) {
+                      setP2MotherArabic(transliterateLatinToArabic(val));
+                    }
+                  }}
+                  className="w-full min-h-[38px] text-xs px-2.5 py-1.5 rounded-xl border border-[#dacdb2] dark:border-[#25344f] bg-white dark:bg-[#0c1222] text-stone-900 dark:text-stone-100"
                   placeholder="Nama Ibu Kandung"
                 />
               </div>
               <div>
-                <label className="text-[11px] font-semibold text-stone-700 dark:text-stone-300 block mb-1">
-                  Arab Nama Ibu:
-                </label>
+                <div className="flex items-center justify-between gap-1 mb-1">
+                  <label className="text-[11px] font-semibold text-stone-700 dark:text-stone-300">
+                    Arab Nama Ibu:
+                  </label>
+                  {p2ManualMotherArabic && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setP2ManualMotherArabic(false);
+                        setP2MotherArabic(transliterateLatinToArabic(p2Mother));
+                      }}
+                      className="text-[10px] text-rose-500 hover:underline"
+                    >
+                      Auto
+                    </button>
+                  )}
+                </div>
                 <input
                   type="text"
                   dir="rtl"
                   value={p2MotherArabic}
-                  onChange={(e) => setP2MotherArabic(e.target.value)}
-                  className="w-full text-xs font-arabic px-2.5 py-1.5 rounded-xl border border-[#dacdb2] dark:border-[#25344f] bg-white dark:bg-[#0c1222] text-stone-900 dark:text-stone-100"
-                  placeholder="خَدِيجَة"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setP2MotherArabic(val);
+                    setP2ManualMotherArabic(val.trim().length > 0);
+                  }}
+                  className="w-full min-h-[38px] text-sm font-arabic px-2.5 py-1.5 rounded-xl border border-[#dacdb2] dark:border-[#25344f] bg-white dark:bg-[#0c1222] text-stone-900 dark:text-stone-100"
+                  placeholder="خديجة"
                 />
               </div>
             </div>

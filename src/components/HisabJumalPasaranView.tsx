@@ -35,6 +35,7 @@ import {
   PANCA_WARA,
   ABJAD_TABLE,
   HisabJumalReport,
+  transliterateLatinToArabic,
 } from '../lib/hisabJumalEngine';
 import { HistoricalDateInfo } from '../types';
 
@@ -244,7 +245,11 @@ Nasihat Spiritual: ${report.spiritualRemedy.spiritualAdvice}`;
 
       {/* SUBMODE 3: KEMENANGAN PERSAINGAN */}
       {subMode === 'competition' && (
-        <CompetitionGhalibSubView theme={theme} onAnnotate={onAnnotate} />
+        <CompetitionGhalibSubView
+          currentDateInfo={currentDateInfo}
+          theme={theme}
+          onAnnotate={onAnnotate}
+        />
       )}
 
       {/* SUBMODE 1: KARAKTER PERSONAL */}
@@ -311,10 +316,10 @@ Nasihat Spiritual: ${report.spiritualRemedy.spiritualAdvice}`;
                 type="text"
                 value={nameInput}
                 onChange={(e) => {
-                  setNameInput(e.target.value);
+                  const val = e.target.value;
+                  setNameInput(val);
                   if (!isCustomArabicMode) {
-                    // Automatically transliterate
-                    setCustomArabic(report.arabicName);
+                    setCustomArabic(transliterateLatinToArabic(val));
                   }
                 }}
                 placeholder="Ketik nama lengkap seseorang..."
@@ -326,7 +331,10 @@ Nasihat Spiritual: ${report.spiritualRemedy.spiritualAdvice}`;
               />
               {nameInput && (
                 <button
-                  onClick={() => setNameInput('')}
+                  onClick={() => {
+                    setNameInput('');
+                    if (!isCustomArabicMode) setCustomArabic('');
+                  }}
                   className="absolute right-2.5 top-2.5 text-xs opacity-50 hover:opacity-100"
                 >
                   ✕
@@ -358,11 +366,12 @@ Nasihat Spiritual: ${report.spiritualRemedy.spiritualAdvice}`;
                 dir="rtl"
                 value={isCustomArabicMode ? customArabic : report.arabicName}
                 onChange={(e) => {
-                  setCustomArabic(e.target.value);
-                  setIsCustomArabicMode(true);
+                  const val = e.target.value;
+                  setCustomArabic(val);
+                  setIsCustomArabicMode(val.trim().length > 0);
                 }}
-                placeholder="الاسم بالعربية..."
-                className={`w-full px-3 py-2 text-base font-serif rounded-lg border outline-none text-right transition-all font-arabic ${
+                placeholder="الاسم بالعربية / جاوي..."
+                className={`w-full px-3 py-2 text-lg rounded-lg border outline-none text-right transition-all font-arabic font-bold ${
                   isNight
                     ? 'bg-[#1a2235] border-[#2e4063] focus:border-[#c59a43] text-amber-200'
                     : 'bg-white border-[#c8b79d] focus:border-[#c59a43] text-amber-900'
@@ -370,16 +379,19 @@ Nasihat Spiritual: ${report.spiritualRemedy.spiritualAdvice}`;
               />
               {isCustomArabicMode && (
                 <button
-                  onClick={() => setIsCustomArabicMode(false)}
+                  onClick={() => {
+                    setIsCustomArabicMode(false);
+                    setCustomArabic(transliterateLatinToArabic(nameInput));
+                  }}
                   className="absolute left-2.5 top-2.5 text-[10px] text-[#c59a43] hover:underline"
-                  title="Kembalikan ke auto-transliterasi Latin"
+                  title="Kembalikan ke auto-transliterasi Arab Melayu"
                 >
                   <RotateCcw size={13} />
                 </button>
               )}
             </div>
             <p className="text-[11px] opacity-70 flex items-center justify-between">
-              <span>{isCustomArabicMode ? 'Mode Manual / Pegon Aktif' : 'Otomatis dari teks Latin'}</span>
+              <span>{isCustomArabicMode ? 'Mode Manual / Pegon Aktif' : 'Otomatis Arab Melayu dari Latin'}</span>
               <span className="font-mono text-[10px] text-[#c59a43]">
                 {report.lettersCount} Huruf Terhitung
               </span>

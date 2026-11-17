@@ -18,6 +18,7 @@ import {
   PANCA_WARA,
   ElementType,
 } from './hisabJumalEngine';
+import { dateToJdn, jdnToHijri } from './calendarConverter';
 
 // ============================================================================
 // PART 1: TAWAFUQ AZ-ZAWJAYN (HISAB KESERASIAN JODOH PASANGAN)
@@ -421,14 +422,61 @@ export interface CompetitorAnalysis {
   optimalPlanetaryHour: string;
 }
 
+export interface CompetitionDateInput {
+  day: number;   // 1 - 31
+  month: number; // 1 - 12
+  year: number;  // e.g. 2026
+}
+
+export interface CompetitionDateSummary {
+  day: number;
+  month: number;
+  monthName: string;
+  year: number;
+  gregorianFormatted: string;
+  hijriDay: number;
+  hijriMonthName: string;
+  hijriYear: number;
+  hijriFormatted: string;
+  pasaranKey: PasaranKey;
+  pasaranName: string;
+  wetonNeptu: number;
+  dateRootMod9: number;
+  dateElement: ElementType;
+}
+
 export interface CompetitionReport {
   dayOfCompetition: DayKey;
   dayRulerPlanet: string;
+  dateSummary: CompetitionDateSummary;
   competitors: CompetitorAnalysis[];
   projectedWinner: CompetitorAnalysis;
   competitionDynamics: string;
   strategicAdvice: string[];
 }
+
+const INDONESIAN_MONTH_NAMES = [
+  'Januari',
+  'Februari',
+  'Maret',
+  'April',
+  'Mei',
+  'Juni',
+  'Juli',
+  'Agustus',
+  'September',
+  'Oktober',
+  'November',
+  'Desember',
+];
+
+const PASARAN_ELEMENT_MAP: Record<PasaranKey, ElementType> = {
+  legi: 'Udara',
+  pahing: 'Api',
+  pon: 'Air',
+  wage: 'Tanah',
+  kliwon: 'Api',
+};
 
 const PLANETARY_DAY_RULERS: Record<DayKey, { planet: string; planetArabic: string; elementFavor: ElementType }> = {
   ahad: { planet: 'Matahari (Ash-Shams)', planetArabic: 'الشَّمْس', elementFavor: 'Api' },
@@ -442,14 +490,54 @@ const PLANETARY_DAY_RULERS: Record<DayKey, { planet: string; planetArabic: strin
 
 /**
  * Calculate classical Al-Ghalib wa al-Maghlub competition report for 2 or more contenders
+ * Incorporating day of week, Gregorian date (day, month, year), Hijri date, and Pasaran Weton
  */
 export function calculateCompetitionReport(
   competitorsInput: CompetitorInput[],
-  day: DayKey = 'ahad'
+  day: DayKey = 'ahad',
+  dateInput?: CompetitionDateInput
 ): CompetitionReport {
   if (competitorsInput.length < 2) {
     throw new Error('Kompetisi membutuhkan minimal 2 peserta untuk dianalisis.');
   }
+
+  const now = new Date();
+  const cYear = dateInput?.year ?? now.getFullYear();
+  const cMonth = Math.min(12, Math.max(1, dateInput?.month ?? now.getMonth() + 1));
+  const maxDaysInMonth = new Date(cYear, cMonth, 0).getDate();
+  const cDay = Math.min(maxDaysInMonth, Math.max(1, dateInput?.day ?? now.getDate()));
+
+  const jdn = dateToJdn(cYear, cMonth, cDay, 12, 0);
+  const hijri = jdnToHijri(jdn);
+
+  const pasaranKeys: PasaranKey[] = ['legi', 'pahing', 'pon', 'wage', 'kliwon'];
+  const pasaranIdx = ((Math.floor(jdn) % 5) + 5) % 5;
+  const pasaranKey = pasaranKeys[pasaranIdx];
+  const pasaranInfo = PANCA_WARA[pasaranKey];
+  const dayWara = SAPTA_WARA[day];
+
+  const wetonNeptu = dayWara.neptu + pasaranInfo.neptu;
+  const rawDateSum = cDay + cMonth + cYear + hijri.day + hijri.month + hijri.year;
+  const dateRootMod9 = rawDateSum % 9 === 0 ? 9 : rawDateSum % 9;
+  const dateElement = PASARAN_ELEMENT_MAP[pasaranKey];
+
+  const monthName = INDONESIAN_MONTH_NAMES[cMonth - 1] || 'Januari';
+  const dateSummary: CompetitionDateSummary = {
+    day: cDay,
+    month: cMonth,
+    monthName,
+    year: cYear,
+    gregorianFormatted: `${cDay} ${monthName} ${cYear}`,
+    hijriDay: hijri.day,
+    hijriMonthName: hijri.monthNameLatin,
+    hijriYear: hijri.year,
+    hijriFormatted: `${hijri.day} ${hijri.monthNameLatin} ${hijri.year} H`,
+    pasaranKey,
+    pasaranName: pasaranInfo.name,
+    wetonNeptu,
+    dateRootMod9,
+    dateElement,
+  };
 
   const dayInfo = PLANETARY_DAY_RULERS[day];
 
@@ -474,9 +562,25 @@ export function calculateCompetitionReport(
       baseScore += 18; // Resonates with day's planetary ruler
     }
 
-    // Parity advantage (ganjil/genap terhadap hari)
+    // Pasaran & Date Element resonance
+    if (dominantElem === dateElement) {
+      baseScore += 10;
+    }
+
+    // Date Root & Hijri Day-Month-Year Harmonic Alignment
+    const combinedCycle = (totalJ + cDay + cMonth + (cYear % 100) + hijri.day + hijri.month) % 9;
+    if (combinedCycle === dateRootMod9 || mod9 === dateRootMod9) {
+      baseScore += 9;
+    } else if (Math.abs(mod9 - dateRootMod9) <= 1) {
+      baseScore += 4;
+    }
+
+    // Parity advantage (ganjil/genap terhadap tanggal & hari)
+    if (mod9 % 2 === cDay % 2) {
+      baseScore += 6;
+    }
     if (mod9 % 2 !== 0) {
-      baseScore += 8; // Odd numbers carry dynamic initiative
+      baseScore += 5; // Odd numbers carry dynamic initiative
     }
 
     return {
@@ -557,10 +661,10 @@ export function calculateCompetitionReport(
 
   const projectedWinner = finalCompetitors[0];
 
-  const competitionDynamics = `Kompetisi pada hari ${SAPTA_WARA[day].arabicName} (${day.toUpperCase()}) dinaungi oleh ${dayInfo.planet} yang menguntungkan unsur ${dayInfo.elementFavor}. Kandidat ${projectedWinner.name} menduduki posisi Al-Ghālib dengan probabilitas ${projectedWinner.winProbabilityScore}%, ditopang oleh resonansi angka akar ${projectedWinner.rootMod9}.`;
+  const competitionDynamics = `Kompetisi pada ${dayWara.name} ${pasaranInfo.name}, ${dateSummary.gregorianFormatted} (${dateSummary.hijriFormatted}) dinaungi oleh ${dayInfo.planet} (unsur hari ${dayInfo.elementFavor} · unsur pasaran ${dateElement} · Neptu ${wetonNeptu}). Kandidat ${projectedWinner.name} menduduki posisi Al-Ghālib dengan probabilitas ${projectedWinner.winProbabilityScore}%, ditopang oleh resonansi angka akar ${projectedWinner.rootMod9} terhadap Mizan tarikh ${dateRootMod9}.`;
 
   const strategicAdvice = [
-    `Bagi ${projectedWinner.name} (Unggul): Jaga kestabilan fokus, jangan meremehkan lawan, dan manfaatkan jam ${projectedWinner.optimalPlanetaryHour} untuk melakukan gebrakan penentu.`,
+    `Bagi ${projectedWinner.name} (Unggul): Jaga kestabilan fokus pada tanggal ${dateSummary.gregorianFormatted}, manfaatkan jam ${projectedWinner.optimalPlanetaryHour} untuk melakukan gebrakan penentu.`,
     `Bagi penantang runner-up: Hindari bertarung di medan keahlian utama ${projectedWinner.name}. Ubah tempo pertandingan dan serang sisi rentannya (${finalCompetitors[1]?.tacticalVulnerability || 'ritme stamina'}).`,
     'Menurut Al-Biruni: Kemenangan sejati dalam hisab falak diraih oleh siapa yang mampu menyeimbangkan hisab lahiriah (latihan keras) dengan kesiapan batiniah (doa dan ketenangan jiwa).',
   ];
@@ -568,6 +672,7 @@ export function calculateCompetitionReport(
   return {
     dayOfCompetition: day,
     dayRulerPlanet: dayInfo.planet,
+    dateSummary,
     competitors: finalCompetitors,
     projectedWinner,
     competitionDynamics,

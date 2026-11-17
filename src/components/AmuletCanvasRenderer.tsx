@@ -47,8 +47,14 @@ export const AmuletCanvasRenderer: React.FC<AmuletCanvasRendererProps> = ({
     }
   }, [amuletData, canvasRef, width, height]);
 
-  const { theme, manzil, hajat, gridType, numeralStyle, cardinalArchangels, angelicForceArabic } = amuletData;
+  const { theme, manzil, hajat, gridType, numeralStyle, cardinalArchangels, angelicForceArabic, inkColor, inkColorId, calligraphyStyle } = amuletData;
   const activeGrid = gridType === '3x3' ? amuletData.grid3x3 : amuletData.grid4x4;
+  const primaryInk = inkColorId === 'theme_default' ? theme.primaryText : inkColor.primaryHex;
+  const accentInk = inkColorId === 'theme_default' ? theme.accentText : inkColor.secondaryHex;
+  const arabicStyle: React.CSSProperties = {
+    fontFamily: calligraphyStyle.fontFamily,
+    fontStyle: calligraphyStyle.fontStyle,
+  };
 
   const formatCellValue = (val: number) => {
     if (numeralStyle === 'arabic') return toEasternArabicDigits(val);
@@ -202,7 +208,7 @@ export const AmuletCanvasRenderer: React.FC<AmuletCanvasRendererProps> = ({
           {/* Bismillah Header */}
           <h2
             className="font-arabic text-lg sm:text-2xl font-bold tracking-normal leading-tight my-0.5"
-            style={{ color: theme.primaryText }}
+            style={{ color: primaryInk, ...arabicStyle }}
           >
             بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
           </h2>
@@ -211,7 +217,7 @@ export const AmuletCanvasRenderer: React.FC<AmuletCanvasRendererProps> = ({
           <div className="flex items-center gap-1.5 mt-0.5 flex-wrap justify-center">
             <span
               className="text-[12px] sm:text-sm font-arabic font-bold"
-              style={{ color: theme.accentText }}
+              style={{ color: accentInk, ...arabicStyle }}
             >
               طِلَسْمُ مَنْزِلِ {manzil.arabicName} الفَلَكِيِّ (مَنْزِلٌ #{manzil.number})
             </span>
@@ -323,7 +329,10 @@ export const AmuletCanvasRenderer: React.FC<AmuletCanvasRendererProps> = ({
                             ? 'text-base sm:text-xl md:text-2xl'
                             : 'text-xs sm:text-base md:text-lg'
                         }`}
-                        style={{ color: theme.primaryText }}
+                        style={{
+                          color: primaryInk,
+                          ...(numeralStyle === 'latin' ? {} : arabicStyle),
+                        }}
                       >
                         {formatCellValue(cellVal)}
                       </span>
@@ -383,7 +392,7 @@ export const AmuletCanvasRenderer: React.FC<AmuletCanvasRendererProps> = ({
           {/* Quranic Verse */}
           <p
             className="font-arabic text-xs sm:text-sm font-bold max-w-[460px] leading-relaxed my-0.5"
-            style={{ color: theme.primaryText }}
+            style={{ color: primaryInk, ...arabicStyle }}
           >
             «{amuletData.quranicInscription}»
           </p>
@@ -391,7 +400,7 @@ export const AmuletCanvasRenderer: React.FC<AmuletCanvasRendererProps> = ({
           {/* Asmaul Husna Inscription */}
           <p
             className="font-arabic text-xs sm:text-[13px] font-bold tracking-wide"
-            style={{ color: theme.accentText }}
+            style={{ color: accentInk, ...arabicStyle }}
           >
             {amuletData.sacredAsmaText}
           </p>
@@ -450,8 +459,15 @@ function renderAmuletOnCanvas(
   width: number,
   height: number
 ) {
-  const { theme, manzil, hajat, gridType, numeralStyle, cardinalArchangels, angelicForceArabic } = data;
+  const { theme, manzil, hajat, gridType, numeralStyle, cardinalArchangels, angelicForceArabic, inkColor, inkColorId, calligraphyStyle } = data;
   const activeGrid = gridType === '3x3' ? data.grid3x3 : data.grid4x4;
+  const primaryInk = inkColorId === 'theme_default' ? theme.primaryText : inkColor.primaryHex;
+  const accentInk = inkColorId === 'theme_default' ? theme.accentText : inkColor.secondaryHex;
+  const makeArabicCanvasFont = (baseRatio: number) => {
+    const px = Math.round(width * baseRatio * calligraphyStyle.scaleFactor);
+    const stylePrefix = calligraphyStyle.fontStyle === 'italic' ? 'italic ' : '';
+    return `${stylePrefix}${calligraphyStyle.fontWeight} ${px}px ${calligraphyStyle.fontFamily}`;
+  };
 
   ctx.save();
   ctx.clearRect(0, 0, width, height);
@@ -510,29 +526,29 @@ function renderAmuletOnCanvas(
 
   // North Angel Pill
   const northY = pad + 55;
-  ctx.font = `bold ${Math.round(width * 0.02)}px "Amiri", "Scheherazade New", "Noto Naskh Arabic", serif`;
-  ctx.fillStyle = theme.accentText;
+  ctx.font = makeArabicCanvasFont(0.02);
+  ctx.fillStyle = accentInk;
   ctx.fillText(`شَمَالاً: ${cardinalArchangels.north}`, cx, northY);
 
   // Bismillah
-  ctx.font = `bold ${Math.round(width * 0.044)}px "Amiri", "Scheherazade New", "Noto Naskh Arabic", serif`;
-  ctx.fillStyle = theme.primaryText;
+  ctx.font = makeArabicCanvasFont(0.044);
+  ctx.fillStyle = primaryInk;
   ctx.fillText('بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ', cx, northY + 62);
 
   // Manzil Title & Number (FIXED: clean Arabic interpolation, no #{manzil.number} bug)
-  ctx.font = `bold ${Math.round(width * 0.026)}px "Amiri", "Scheherazade New", "Noto Naskh Arabic", serif`;
-  ctx.fillStyle = theme.accentText;
+  ctx.font = makeArabicCanvasFont(0.026);
+  ctx.fillStyle = accentInk;
   const easternManzilNum = toEasternArabicDigits(manzil.number);
   ctx.fillText(`طِلَسْمُ مَنْزِلِ ${manzil.arabicName} الفَلَكِيِّ (مَنْزِلٌ رَقْم ${easternManzilNum})`, cx, northY + 118);
 
   ctx.font = `bold ${Math.round(width * 0.016)}px "Cinzel", "Playfair Display", "Georgia", serif`;
-  ctx.fillStyle = theme.primaryText;
+  ctx.fillStyle = primaryInk;
   ctx.fillText(`${manzil.transliteration.toUpperCase()} (${manzil.meaningId.toUpperCase()}) • ${hajat.titleLatin.toUpperCase()}`, cx, northY + 156);
 
   // 4. Seven Mystical Symbols
   const sigilY = northY + 205;
-  ctx.font = `bold ${Math.round(width * 0.027)}px "Amiri", "Scheherazade New", serif`;
-  ctx.fillStyle = theme.sigilColor;
+  ctx.font = makeArabicCanvasFont(0.027);
+  ctx.fillStyle = inkColorId === 'theme_default' ? theme.sigilColor : accentInk;
   const sigilSpacing = width * 0.062;
   const sigilStartX = cx - (SEVEN_TALISMANIC_SIGILS.length - 1) * (sigilSpacing / 2);
   SEVEN_TALISMANIC_SIGILS.forEach((sig, idx) => {
@@ -575,15 +591,17 @@ function renderAmuletOnCanvas(
       if (numeralStyle === 'arabic') strVal = toEasternArabicDigits(cellVal);
       if (numeralStyle === 'abjad') strVal = toAbjadNumerals(cellVal);
 
-      ctx.font = `bold ${Math.round(cellSize * 0.42)}px "Amiri", "Scheherazade New", "Noto Naskh Arabic", serif`;
-      ctx.fillStyle = theme.primaryText;
+      ctx.font = numeralStyle === 'latin'
+        ? `bold ${Math.round(cellSize * 0.42)}px "Cinzel", "Playfair Display", serif`
+        : `${calligraphyStyle.fontStyle === 'italic' ? 'italic ' : ''}${calligraphyStyle.fontWeight} ${Math.round(cellSize * 0.42 * calligraphyStyle.scaleFactor)}px ${calligraphyStyle.fontFamily}`;
+      ctx.fillStyle = primaryInk;
       ctx.fillText(strVal, cellLeft + cellSize / 2, cellTop + cellSize / 2);
     }
   }
 
   // 4 Corner Baduh letters around the Wafaq (ب د و ح)
-  ctx.font = `bold ${Math.round(width * 0.016)}px "Amiri", serif`;
-  ctx.fillStyle = theme.accentText;
+  ctx.font = makeArabicCanvasFont(0.016);
+  ctx.fillStyle = accentInk;
   ctx.fillText('ب', gridX - 16, gridY - 8);
   ctx.fillText('د', gridX + gridSize + 16, gridY - 8);
   ctx.fillText('و', gridX - 16, gridY + gridSize + 8);
@@ -596,8 +614,8 @@ function renderAmuletOnCanvas(
   ctx.save();
   ctx.translate(width - pad - 42, archangelSideY);
   ctx.rotate(Math.PI / 2);
-  ctx.font = `bold ${Math.round(width * 0.02)}px "Amiri", "Scheherazade New", serif`;
-  ctx.fillStyle = theme.accentText;
+  ctx.font = makeArabicCanvasFont(0.02);
+  ctx.fillStyle = accentInk;
   ctx.fillText(`مَشْرِقاً: ${cardinalArchangels.east}`, 0, 0);
   ctx.restore();
 
@@ -605,8 +623,8 @@ function renderAmuletOnCanvas(
   ctx.save();
   ctx.translate(pad + 42, archangelSideY);
   ctx.rotate(-Math.PI / 2);
-  ctx.font = `bold ${Math.round(width * 0.02)}px "Amiri", "Scheherazade New", serif`;
-  ctx.fillStyle = theme.accentText;
+  ctx.font = makeArabicCanvasFont(0.02);
+  ctx.fillStyle = accentInk;
   ctx.fillText(`مَغْرِباً: ${cardinalArchangels.west}`, 0, 0);
   ctx.restore();
 
@@ -615,22 +633,22 @@ function renderAmuletOnCanvas(
 
   // Mizan Balance
   ctx.font = `bold ${Math.round(width * 0.019)}px "Cinzel", "Playfair Display", serif`;
-  ctx.fillStyle = theme.primaryText;
+  ctx.fillStyle = primaryInk;
   ctx.fillText(`Mīzān al-Wafaq (Jumlah Baris & Kolom): ${activeGrid.targetSum}  •  وَفْقٌ تَامٌّ مَوْزُون`, cx, bottomY);
 
   // Quranic Ayah
-  ctx.font = `bold ${Math.round(width * 0.024)}px "Amiri", "Scheherazade New", "Noto Naskh Arabic", serif`;
-  ctx.fillStyle = theme.primaryText;
+  ctx.font = makeArabicCanvasFont(0.024);
+  ctx.fillStyle = primaryInk;
   ctx.fillText(`«${data.quranicInscription}»`, cx, bottomY + 44);
 
   // Asmaul Husna
-  ctx.font = `bold ${Math.round(width * 0.024)}px "Amiri", "Scheherazade New", serif`;
-  ctx.fillStyle = theme.accentText;
+  ctx.font = makeArabicCanvasFont(0.024);
+  ctx.fillStyle = accentInk;
   ctx.fillText(data.sacredAsmaText, cx, bottomY + 86);
 
   // South Angel & Spiritual Khadim
-  ctx.font = `bold ${Math.round(width * 0.02)}px "Amiri", "Scheherazade New", serif`;
-  ctx.fillStyle = theme.accentText;
+  ctx.font = makeArabicCanvasFont(0.02);
+  ctx.fillStyle = accentInk;
   ctx.fillText(
     `جَنُوباً: ${cardinalArchangels.south}  •  خَادِمُ الفَلَكِ: ${angelicForceArabic} (${manzil.angelicForce})`,
     cx,

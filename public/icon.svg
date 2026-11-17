@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="skyGrad" cx="50%" cy="45%" r="65%">
+      <stop offset="0%" stop-color="#172238" />
+      <stop offset="65%" stop-color="#0d1320" />
+      <stop offset="100%" stop-color="#070a11" />
+    </radialGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f3d485" />
+      <stop offset="50%" stop-color="#c59a43" />
+      <stop offset="100%" stop-color="#8c671d" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="108" fill="url(#skyGrad)" />
+  <circle cx="256" cy="256" r="204" fill="none" stroke="url(#goldGrad)" stroke-width="10" />
+  <circle cx="256" cy="256" r="184" fill="none" stroke="#c59a43" stroke-opacity="0.45" stroke-width="3" stroke-dasharray="10 10" />
+  <circle cx="256" cy="256" r="142" fill="none" stroke="url(#goldGrad)" stroke-width="6" />
+  <!-- Rub el Hizb 8-pointed star -->
+  <rect x="150" y="150" width="212" height="212" fill="none" stroke="url(#goldGrad)" stroke-width="10" rx="6" />
+  <rect x="150" y="150" width="212" height="212" fill="none" stroke="url(#goldGrad)" stroke-width="10" rx="6" transform="rotate(45 256 256)" />
+  <!-- Astrolabe compass needle + crescent center -->
+  <polygon points="256,120 278,234 392,256 278,278 256,392 234,278 120,256 234,234" fill="url(#goldGrad)" />
+  <circle cx="256" cy="256" r="30" fill="#0d1320" stroke="#f3d485" stroke-width="6" />
+  <circle cx="256" cy="256" r="12" fill="#f3d485" />
+</svg>

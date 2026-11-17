@@ -24,11 +24,37 @@ import {
   CompetitorInput,
   CompetitionReport,
 } from '../lib/compatibilityEngine';
-import { DayKey, SAPTA_WARA } from '../lib/hisabJumalEngine';
+import { DayKey, SAPTA_WARA, transliterateLatinToArabic } from '../lib/hisabJumalEngine';
+import { dateToJdn } from '../lib/calendarConverter';
+import { HistoricalDateInfo } from '../types';
 
 interface CompetitionGhalibSubViewProps {
+  currentDateInfo?: HistoricalDateInfo;
   theme: 'night' | 'parchment';
   onAnnotate?: (title: string, content: string) => void;
+}
+
+const MONTH_OPTIONS = [
+  { value: 1, label: 'Januari' },
+  { value: 2, label: 'Februari' },
+  { value: 3, label: 'Maret' },
+  { value: 4, label: 'April' },
+  { value: 5, label: 'Mei' },
+  { value: 6, label: 'Juni' },
+  { value: 7, label: 'Juli' },
+  { value: 8, label: 'Agustus' },
+  { value: 9, label: 'September' },
+  { value: 10, label: 'Oktober' },
+  { value: 11, label: 'November' },
+  { value: 12, label: 'Desember' },
+];
+
+const DAY_KEYS_FROM_JDN: DayKey[] = ['ahad', 'senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu'];
+
+function deriveDayKeyFromDate(year: number, month: number, day: number): DayKey {
+  const jdn = dateToJdn(year, month, day, 12, 0);
+  const weekdayIndex = ((Math.floor(jdn + 1.5) % 7) + 7) % 7;
+  return DAY_KEYS_FROM_JDN[weekdayIndex] || 'ahad';
 }
 
 const PRESET_SCENARIOS: {
@@ -68,29 +94,122 @@ const PRESET_SCENARIOS: {
 ];
 
 export const CompetitionGhalibSubView: React.FC<CompetitionGhalibSubViewProps> = ({
+  currentDateInfo,
   theme,
   onAnnotate,
 }) => {
-  const isNight = theme === 'night';
+  const initialDate = useMemo(() => {
+    if (currentDateInfo?.gregorian) {
+      return {
+        day: currentDateInfo.gregorian.day,
+        month: currentDateInfo.gregorian.month,
+        year: currentDateInfo.gregorian.year,
+      };
+    }
+    const now = new Date();
+    return {
+      day: now.getDate(),
+      month: now.getMonth() + 1,
+      year: now.getFullYear(),
+    };
+  }, [currentDateInfo?.gregorian?.day, currentDateInfo?.gregorian?.month, currentDateInfo?.gregorian?.year]);
 
-  const [competitionDay, setCompetitionDay] = useState<DayKey>('ahad');
+  const [matchDay, setMatchDay] = useState<number>(initialDate.day);
+  const [matchMonth, setMatchMonth] = useState<number>(initialDate.month);
+  const [matchYear, setMatchYear] = useState<number>(initialDate.year);
+  const [competitionDay, setCompetitionDay] = useState<DayKey>(() =>
+    deriveDayKeyFromDate(initialDate.year, initialDate.month, initialDate.day)
+  );
   const [competitors, setCompetitors] = useState<CompetitorInput[]>([
-    { id: '1', name: 'Ahmad Dahlan', nameArabic: 'أَحْمَد دَحْلَان', roleOrTeam: 'Kandidat A' },
-    { id: '2', name: 'Hasyim Asy\'ari', nameArabic: 'هَاشِم أَشْعَرِي', roleOrTeam: 'Kandidat B' },
-    { id: '3', name: 'Tjokroaminoto', nameArabic: 'تْشُوكْرُو أَمِينُوتُو', roleOrTeam: 'Kandidat C' },
+    { id: '1', name: 'Ahmad Dahlan', nameArabic: 'أحمد دحلان', roleOrTeam: 'Kandidat A' },
+    { id: '2', name: 'Hasyim Asy\'ari', nameArabic: 'هاشم أشعري', roleOrTeam: 'Kandidat B' },
+    { id: '3', name: 'Tjokroaminoto', nameArabic: 'چوكرو امينوتو', roleOrTeam: 'Kandidat C' },
   ]);
+  const [manualArabicIds, setManualArabicIds] = useState<Record<string, boolean>>({});
 
   const [copiedNotification, setCopiedNotification] = useState<string | null>(null);
 
+  const daysInSelectedMonth = useMemo(() => {
+    const safeYear = Math.max(1, Math.min(9999, matchYear || 2026));
+    return new Date(safeYear, matchMonth, 0).getDate();
+  }, [matchYear, matchMonth]);
+
+  const clampedMatchDay = Math.min(matchDay, daysInSelectedMonth);
+
+  const handleDatePartChange = (newDay: number, newMonth: number, newYear: number) => {
+    const validYear = Number.isFinite(newYear) ? Math.max(1, Math.min(9999, newYear)) : 2026;
+    const validMonth = Math.max(1, Math.min(12, newMonth));
+    const maxDays = new Date(validYear, validMonth, 0).getDate();
+    const validDay = Math.max(1, Math.min(maxDays, newDay));
+
+    setMatchYear(validYear);
+    setMatchMonth(validMonth);
+    setMatchDay(validDay);
+    setCompetitionDay(deriveDayKeyFromDate(validYear, validMonth, validDay));
+  };
+
+  const handleSyncTodayDate = () => {
+    const target = currentDateInfo?.gregorian
+      ? {
+          day: currentDateInfo.gregorian.day,
+          month: currentDateInfo.gregorian.month,
+          year: currentDateInfo.gregorian.year,
+        }
+      : (() => {
+          const now = new Date();
+          return { day: now.getDate(), month: now.getMonth() + 1, year: now.getFullYear() };
+        })();
+    handleDatePartChange(target.day, target.month, target.year);
+  };
+
   // Compute Competition Report
   const report: CompetitionReport = useMemo(() => {
-    return calculateCompetitionReport(competitors, competitionDay);
-  }, [competitors, competitionDay]);
+    return calculateCompetitionReport(competitors, competitionDay, {
+      day: clampedMatchDay,
+      month: matchMonth,
+      year: Math.max(1, Math.min(9999, matchYear || 2026)),
+    });
+  }, [competitors, competitionDay, clampedMatchDay, matchMonth, matchYear]);
 
-  // Handle Update Competitor
+  // Handle Update Competitor (auto-syncs Lafaz Arab Melayu unless manually overridden)
   const handleUpdateCompetitor = (id: string, field: keyof CompetitorInput, val: string) => {
+    if (field === 'nameArabic') {
+      const hasCustom = val.trim().length > 0;
+      setManualArabicIds((prev) => ({ ...prev, [id]: hasCustom }));
+      setCompetitors((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, nameArabic: val } : c))
+      );
+      return;
+    }
+
+    if (field === 'name') {
+      const isManual = !!manualArabicIds[id];
+      setCompetitors((prev) =>
+        prev.map((c) =>
+          c.id === id
+            ? {
+                ...c,
+                name: val,
+                nameArabic: isManual ? c.nameArabic : transliterateLatinToArabic(val),
+              }
+            : c
+        )
+      );
+      return;
+    }
+
     setCompetitors((prev) =>
       prev.map((c) => (c.id === id ? { ...c, [field]: val } : c))
+    );
+  };
+
+  // Re-sync Arabic from Latin explicitly
+  const handleResyncArabic = (id: string) => {
+    setManualArabicIds((prev) => ({ ...prev, [id]: false }));
+    setCompetitors((prev) =>
+      prev.map((c) =>
+        c.id === id ? { ...c, nameArabic: transliterateLatinToArabic(c.name) } : c
+      )
     );
   };
 
@@ -98,21 +217,29 @@ export const CompetitionGhalibSubView: React.FC<CompetitionGhalibSubViewProps> =
   const handleAddCompetitor = () => {
     if (competitors.length >= 6) return;
     const newId = (Date.now() % 10000).toString();
-    setCompetitors((prev) => [
-      ...prev,
-      {
-        id: newId,
-        name: `Peserta ${prev.length + 1}`,
-        nameArabic: '',
-        roleOrTeam: `Regu ${String.fromCharCode(65 + prev.length)}`,
-      },
-    ]);
+    setCompetitors((prev) => {
+      const defaultName = `Peserta ${prev.length + 1}`;
+      return [
+        ...prev,
+        {
+          id: newId,
+          name: defaultName,
+          nameArabic: transliterateLatinToArabic(defaultName),
+          roleOrTeam: `Regu ${String.fromCharCode(65 + prev.length)}`,
+        },
+      ];
+    });
   };
 
   // Remove Competitor
   const handleRemoveCompetitor = (id: string) => {
     if (competitors.length <= 2) return;
     setCompetitors((prev) => prev.filter((c) => c.id !== id));
+    setManualArabicIds((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
   };
 
   // Apply Preset
@@ -120,13 +247,20 @@ export const CompetitionGhalibSubView: React.FC<CompetitionGhalibSubViewProps> =
     const found = PRESET_SCENARIOS.find((p) => p.id === presetId);
     if (!found) return;
     setCompetitionDay(found.day);
-    setCompetitors(found.competitors);
+    setManualArabicIds({});
+    setCompetitors(
+      found.competitors.map((c) => ({
+        ...c,
+        nameArabic: c.nameArabic || transliterateLatinToArabic(c.name),
+      }))
+    );
   };
 
   // Copy Summary
   const handleCopySummary = () => {
     const text = `=== HASIL HISAB AL-GHALIB WA AL-MAGHLUB ===
-Hari Pertandingan: ${competitionDay.toUpperCase()} (Dinaungi ${report.dayRulerPlanet})
+Hari & Tarikh: ${SAPTA_WARA[competitionDay].name} ${report.dateSummary.pasaranName}, ${report.dateSummary.gregorianFormatted} (${report.dateSummary.hijriFormatted})
+Penguasa Hari: ${report.dayRulerPlanet} | Weton Neptu: ${report.dateSummary.wetonNeptu} | Akar Tarikh: ${report.dateSummary.dateRootMod9}
 PEMENANG UTAMA TERPROYEKSI: ${report.projectedWinner.name} (Peluang: ${report.projectedWinner.winProbabilityScore}%)
 
 PAPAN PERINGKAT:
@@ -190,40 +324,134 @@ ${report.strategicAdvice.join('\n')}
         </div>
       )}
 
-      {/* Preset Scenarios */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-[#f7f2e7] dark:bg-[#151c2e] border border-[#dacdb2] dark:border-[#25344f] rounded-2xl p-4 shadow-sm">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-serif font-bold text-stone-600 dark:text-stone-400">
-            Skenario Simulasi:
-          </span>
-          {PRESET_SCENARIOS.map((sc) => (
-            <button
-              key={sc.id}
-              onClick={() => handleApplyPreset(sc.id)}
-              className="text-xs px-2.5 py-1 rounded-lg border border-[#dacdb2] dark:border-[#25344f] bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:border-amber-500 hover:text-amber-600 transition-colors"
-            >
-              {sc.title}
-            </button>
-          ))}
+      {/* Preset Scenarios & Date/Day Selector */}
+      <div className="bg-[#f7f2e7] dark:bg-[#151c2e] border border-[#dacdb2] dark:border-[#25344f] rounded-2xl p-4 shadow-sm space-y-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-serif font-bold text-stone-600 dark:text-stone-400">
+              Skenario Simulasi:
+            </span>
+            {PRESET_SCENARIOS.map((sc) => (
+              <button
+                key={sc.id}
+                onClick={() => handleApplyPreset(sc.id)}
+                className="text-xs px-2.5 py-1 rounded-lg border border-[#dacdb2] dark:border-[#25344f] bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:border-amber-500 hover:text-amber-600 transition-colors cursor-pointer whitespace-nowrap"
+              >
+                {sc.title}
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleSyncTodayDate}
+            className="text-xs px-3 py-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 font-medium flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+            title="Sinkronkan dengan tanggal aktif aplikasi"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Sinkronkan Tarikh Aktif</span>
+          </button>
         </div>
 
-        {/* Day of Competition */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-serif font-bold text-stone-700 dark:text-stone-300 flex items-center gap-1">
-            <Calendar className="w-3.5 h-3.5 text-amber-500" />
-            <span>Hari Laga:</span>
-          </span>
-          <select
-            value={competitionDay}
-            onChange={(e) => setCompetitionDay(e.target.value as DayKey)}
-            className="text-xs font-medium px-3 py-1.5 rounded-xl border border-[#dacdb2] dark:border-[#25344f] bg-white dark:bg-[#0c1222] text-stone-900 dark:text-stone-100"
-          >
-            {(Object.keys(SAPTA_WARA) as DayKey[]).map((d) => (
-              <option key={d} value={d}>
-                {d.toUpperCase()} (Kawkab: {SAPTA_WARA[d].arabicName})
-              </option>
-            ))}
-          </select>
+        {/* Tanggal, Hari, Bulan, Tahun untuk Hisab Al-Ghalib wa al-Maghlub */}
+        <div className="pt-3 border-t border-[#dacdb2]/70 dark:border-[#25344f] flex flex-wrap items-end justify-between gap-3">
+          <div className="flex flex-wrap items-end gap-2.5">
+            {/* Tanggal */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-serif font-bold text-stone-600 dark:text-stone-400 block">
+                Tanggal
+              </label>
+              <select
+                value={clampedMatchDay}
+                onChange={(e) => handleDatePartChange(parseInt(e.target.value, 10), matchMonth, matchYear)}
+                aria-label="Tanggal Laga"
+                className="text-xs font-mono tabular-nums font-medium px-2.5 py-1.5 rounded-xl border border-[#dacdb2] dark:border-[#25344f] bg-white dark:bg-[#0c1222] text-stone-900 dark:text-stone-100 min-w-[68px]"
+              >
+                {Array.from({ length: daysInSelectedMonth }, (_, i) => i + 1).map((d) => (
+                  <option key={d} value={d}>
+                    {String(d).padStart(2, '0')}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Bulan */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-serif font-bold text-stone-600 dark:text-stone-400 block">
+                Bulan
+              </label>
+              <select
+                value={matchMonth}
+                onChange={(e) => handleDatePartChange(clampedMatchDay, parseInt(e.target.value, 10), matchYear)}
+                aria-label="Bulan Laga"
+                className="text-xs font-medium px-3 py-1.5 rounded-xl border border-[#dacdb2] dark:border-[#25344f] bg-white dark:bg-[#0c1222] text-stone-900 dark:text-stone-100"
+              >
+                {MONTH_OPTIONS.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Tahun */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-serif font-bold text-stone-600 dark:text-stone-400 block">
+                Tahun
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={9999}
+                value={matchYear}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value, 10);
+                  if (!Number.isNaN(val)) {
+                    handleDatePartChange(clampedMatchDay, matchMonth, val);
+                  } else {
+                    setMatchYear(2026);
+                  }
+                }}
+                aria-label="Tahun Laga"
+                className="w-24 text-xs font-mono tabular-nums font-medium px-3 py-1.5 rounded-xl border border-[#dacdb2] dark:border-[#25344f] bg-white dark:bg-[#0c1222] text-stone-900 dark:text-stone-100"
+              />
+            </div>
+
+            {/* Hari Laga */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-serif font-bold text-stone-700 dark:text-stone-300 flex items-center gap-1">
+                <Calendar className="w-3.5 h-3.5 text-amber-500" />
+                <span>Hari Laga</span>
+              </label>
+              <select
+                value={competitionDay}
+                onChange={(e) => setCompetitionDay(e.target.value as DayKey)}
+                aria-label="Hari Laga"
+                className="text-xs font-medium px-3 py-1.5 rounded-xl border border-[#dacdb2] dark:border-[#25344f] bg-white dark:bg-[#0c1222] text-stone-900 dark:text-stone-100"
+              >
+                {(Object.keys(SAPTA_WARA) as DayKey[]).map((d) => (
+                  <option key={d} value={d}>
+                    {SAPTA_WARA[d].name} (Kawkab: {SAPTA_WARA[d].arabicName})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Unboxed Derived Calendar Metadata */}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-stone-600 dark:text-stone-400 font-serif">
+            <span className="font-semibold text-stone-800 dark:text-stone-200">
+              {SAPTA_WARA[competitionDay].name} {report.dateSummary.pasaranName}
+            </span>
+            <span aria-hidden="true">·</span>
+            <span className="font-mono tabular-nums">{report.dateSummary.gregorianFormatted}</span>
+            <span aria-hidden="true">·</span>
+            <span className="text-amber-700 dark:text-amber-400 font-medium">{report.dateSummary.hijriFormatted}</span>
+            <span aria-hidden="true">·</span>
+            <span className="font-mono tabular-nums">Neptu {report.dateSummary.wetonNeptu}</span>
+            <span aria-hidden="true">·</span>
+            <span className="font-mono tabular-nums">Akar Tarikh {report.dateSummary.dateRootMod9}</span>
+          </div>
         </div>
       </div>
 
@@ -289,22 +517,39 @@ ${report.strategicAdvice.join('\n')}
                   type="text"
                   value={c.name}
                   onChange={(e) => handleUpdateCompetitor(c.id, 'name', e.target.value)}
-                  className="w-full text-xs font-medium px-2.5 py-1.5 rounded-lg border border-[#dacdb2] dark:border-[#25344f] bg-stone-50 dark:bg-stone-900 text-stone-900 dark:text-stone-100"
-                  placeholder="Nama Peserta"
+                  className="w-full min-h-[40px] text-xs font-medium px-2.5 py-1.5 rounded-lg border border-[#dacdb2] dark:border-[#25344f] bg-stone-50 dark:bg-stone-900 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  placeholder="cth: Mulyadi atau Syamsul Rizal"
                 />
               </div>
 
               <div>
-                <label className="text-[11px] font-semibold text-stone-600 dark:text-stone-400 block mb-0.5">
-                  Lafaz Arab (Opsional):
-                </label>
+                <div className="flex items-center justify-between gap-1 mb-0.5">
+                  <label className="text-[11px] font-semibold text-stone-600 dark:text-stone-400">
+                    Lafaz Arab Melayu (Opsional):
+                  </label>
+                  {manualArabicIds[c.id] ? (
+                    <button
+                      type="button"
+                      onClick={() => handleResyncArabic(c.id)}
+                      className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-0.5 cursor-pointer"
+                      title="Otomatiskan ulang dari Nama Latin"
+                    >
+                      <RotateCcw className="w-2.5 h-2.5" />
+                      <span>Auto Melayu</span>
+                    </button>
+                  ) : (
+                    <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400">
+                      Otomatis
+                    </span>
+                  )}
+                </div>
                 <input
                   type="text"
                   dir="rtl"
                   value={c.nameArabic || ''}
                   onChange={(e) => handleUpdateCompetitor(c.id, 'nameArabic', e.target.value)}
-                  className="w-full text-xs font-arabic px-2.5 py-1.5 rounded-lg border border-[#dacdb2] dark:border-[#25344f] bg-stone-50 dark:bg-stone-900 text-stone-900 dark:text-stone-100"
-                  placeholder="الاسم بالعربية"
+                  className="w-full min-h-[42px] text-base font-arabic font-bold px-2.5 py-1.5 rounded-lg border border-[#dacdb2] dark:border-[#25344f] bg-stone-50 dark:bg-stone-900 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  placeholder="الاسم بالعربية / جاوي"
                 />
               </div>
 
@@ -337,6 +582,9 @@ ${report.strategicAdvice.join('\n')}
               <Trophy className="w-6 h-6 text-amber-500" />
               <span>Pemenang Terproyeksi: {report.projectedWinner.name}</span>
             </h2>
+            <p className="text-xs text-stone-700 dark:text-stone-300 font-medium">
+              {SAPTA_WARA[competitionDay].name} {report.dateSummary.pasaranName}, {report.dateSummary.gregorianFormatted} ({report.dateSummary.hijriFormatted}) · {report.dayRulerPlanet}
+            </p>
             <p className="text-xs text-stone-600 dark:text-stone-400 font-serif">
               {report.competitionDynamics}
             </p>
@@ -349,7 +597,7 @@ ${report.strategicAdvice.join('\n')}
                 <div className="text-[10px] uppercase font-bold text-amber-700 dark:text-amber-300">
                   Peluang Keunggulan
                 </div>
-                <div className="text-2xl font-bold font-mono text-stone-900 dark:text-stone-100">
+                <div className="text-2xl font-bold font-mono tabular-nums text-stone-900 dark:text-stone-100">
                   {report.projectedWinner.winProbabilityScore}%
                 </div>
               </div>
@@ -359,7 +607,7 @@ ${report.strategicAdvice.join('\n')}
             <div className="flex flex-col gap-1.5">
               <button
                 onClick={handleCopySummary}
-                className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 flex items-center gap-1.5 transition-colors"
+                className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <Copy className="w-3.5 h-3.5" />
                 <span>Salin Hasil</span>
@@ -369,10 +617,10 @@ ${report.strategicAdvice.join('\n')}
                   onClick={() =>
                     onAnnotate(
                       `Hisab Kompetisi: ${report.projectedWinner.name} (Al-Ghalib)`,
-                      `Hari: ${competitionDay.toUpperCase()}\nPemenang: ${report.projectedWinner.name} (${report.projectedWinner.winProbabilityScore}%)\n${report.competitionDynamics}`
+                      `Tarikh: ${SAPTA_WARA[competitionDay].name} ${report.dateSummary.pasaranName}, ${report.dateSummary.gregorianFormatted} (${report.dateSummary.hijriFormatted})\nPemenang: ${report.projectedWinner.name} (${report.projectedWinner.winProbabilityScore}%)\n${report.competitionDynamics}`
                     )
                   }
-                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-1.5 transition-colors shadow-sm"
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
                 >
                   <BookmarkPlus className="w-3.5 h-3.5" />
                   <span>Catat Riset</span>
