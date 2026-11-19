@@ -11,6 +11,8 @@ import {
   Crosshair,
   SlidersHorizontal,
   ArrowUpRight,
+  Search,
+  Grid3X3,
 } from 'lucide-react';
 import { HistoricalDateInfo, ThemeMode } from '../types';
 import { ZODIAC_SIGNS } from '../lib/sindhindEngine';
@@ -51,13 +53,22 @@ export const PlanetaryHistoricalAnalysisView: React.FC<PlanetaryHistoricalAnalys
   const chartWrapperRef = useRef<HTMLDivElement>(null);
   const mainSvgRef = useRef<SVGSVGElement>(null);
   const brushSvgRef = useRef<SVGSVGElement>(null);
+  const heatmapWrapperRef = useRef<HTMLDivElement>(null);
+  const heatmapSvgRef = useRef<SVGSVGElement>(null);
 
   const [chartWidth, setChartWidth] = useState<number>(880);
+  const [heatmapWidth, setHeatmapWidth] = useState<number>(880);
   const [chartMode, setChartMode] = useState<AnalysisChartMode>('longitude');
   const [cadence, setCadence] = useState<SamplingCadence>('quarterly');
   const [referencePlanet, setReferencePlanet] = useState<ClassicalKawkabKey>('saturn');
   const [showConjunctionMarkers, setShowConjunctionMarkers] = useState<boolean>(true);
   const [showZodiacBands, setShowZodiacBands] = useState<boolean>(true);
+  const [jumpYearInput, setJumpYearInput] = useState<string>('');
+  const [hoveredHeatmapCell, setHoveredHeatmapCell] = useState<{
+    planet: ClassicalKawkabKey;
+    signIndex: number;
+    pct: number;
+  } | null>(null);
 
   // Active planet visibility (defaults to all 7 Kawkab visible)
   const [visiblePlanets, setVisiblePlanets] = useState<Record<ClassicalKawkabKey, boolean>>({
@@ -111,18 +122,27 @@ export const PlanetaryHistoricalAnalysisView: React.FC<PlanetaryHistoricalAnalys
     }
   }, [dataset]);
 
-  // Fluid responsive ResizeObserver for SVG canvas
+  // Fluid responsive ResizeObserver for SVG canvases
   useEffect(() => {
-    if (!chartWrapperRef.current) return;
+    const targets: Array<{ el: HTMLDivElement | null; setter: (w: number) => void }> = [
+      { el: chartWrapperRef.current, setter: setChartWidth },
+      { el: heatmapWrapperRef.current, setter: setHeatmapWidth },
+    ];
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const w = entry.contentRect.width;
-        if (w > 0) {
-          setChartWidth(Math.max(300, Math.floor(w)));
+        if (w <= 0) continue;
+        const clamped = Math.max(300, Math.floor(w));
+        if (entry.target === chartWrapperRef.current) {
+          setChartWidth(clamped);
+        } else if (entry.target === heatmapWrapperRef.current) {
+          setHeatmapWidth(clamped);
         }
       }
     });
-    observer.observe(chartWrapperRef.current);
+    for (const t of targets) {
+      if (t.el) observer.observe(t.el);
+    }
     return () => observer.disconnect();
   }, []);
 
@@ -189,6 +209,23 @@ export const PlanetaryHistoricalAnalysisView: React.FC<PlanetaryHistoricalAnalys
   const applyYearSpanPreset = (spanYears: number) => {
     const minY = Math.max(dataset.startYear, dataset.endYear - spanYears);
     setYearDomain([minY, dataset.endYear]);
+  };
+
+  const handleJumpToYear = (e: React.FormEvent) => {
+    e.preventDefault();
+    const parsed = parseInt(jumpYearInput.trim(), 10);
+    if (Number.isNaN(parsed)) return;
+    const clampedYear = Math.max(dataset.startYear, Math.min(dataset.endYear, parsed));
+    const minY = Math.max(dataset.startYear, clampedYear - 6);
+    const maxY = Math.min(dataset.endYear, clampedYear + 6);
+    setYearDomain([minY, maxY]);
+    const closest = dataset.points.reduce((best, curr) =>
+      Math.abs(curr.decimalYear - clampedYear) < Math.abs(best.decimalYear - clampedYear)
+        ? curr
+        : best
+    );
+    setPinnedEpoch(closest);
+    setJumpYearInput(String(clampedYear));
   };
 
   const handleExportCsv = () => {
@@ -403,8 +440,11 @@ export const PlanetaryHistoricalAnalysisView: React.FC<PlanetaryHistoricalAnalys
             .attr('fill', 'none')
             .attr('stroke', color)
             .attr('stroke-width', isSlowPlanet ? 2.1 : 1.35)
-            .attr('stroke-opacity', isSlowPlanet ? 0.95 : 0.68)
-            .attr('d', lineGen);
+            .attr('stroke-opacity', 0)
+            .attr('d', lineGen)
+            .transition()
+            .duration(260)
+            .attr('stroke-opacity', isSlowPlanet ? 0.95 : 0.68);
         });
       } else {
         const lineGen = d3
@@ -429,8 +469,11 @@ export const PlanetaryHistoricalAnalysisView: React.FC<PlanetaryHistoricalAnalys
           .attr('fill', 'none')
           .attr('stroke', color)
           .attr('stroke-width', isSlowPlanet ? 2.1 : 1.45)
-          .attr('stroke-opacity', isSlowPlanet ? 0.92 : 0.7)
-          .attr('d', lineGen);
+          .attr('stroke-opacity', 0)
+          .attr('d', lineGen)
+          .transition()
+          .duration(260)
+          .attr('stroke-opacity', isSlowPlanet ? 0.92 : 0.7);
       }
     });
 
@@ -666,6 +709,163 @@ export const PlanetaryHistoricalAnalysisView: React.FC<PlanetaryHistoricalAnalys
       .attr('stroke-width', 1.2);
   }, [dataset, chartWidth, yearDomain, isNight]);
 
+  // D3.js 100-Year 7-Kawkab × 12-Buruj Occupancy Heatmap
+  useEffect(() => {
+    if (!heatmapSvgRef.current || dataset.summaries.length === 0) return;
+
+    const svg = d3.select(heatmapSvgRef.current);
+    svg.selectAll('*').remove();
+
+    const isCompact = heatmapWidth < 600;
+    const rowHeight = isCompact ? 30 : 34;
+    const margin = {
+      top: 34,
+      right: 12,
+      bottom: 12,
+      left: isCompact ? 76 : 112,
+    };
+    const innerW = Math.max(180, heatmapWidth - margin.left - margin.right);
+    const innerH = SEVEN_KAWKAB_KEYS.length * rowHeight;
+    const totalH = innerH + margin.top + margin.bottom;
+
+    svg.attr('viewBox', `0 0 ${heatmapWidth} ${totalH}`).attr('height', totalH);
+
+    const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+    const xBand = d3
+      .scaleBand<number>()
+      .domain(ZODIAC_SIGNS.map((s) => s.index))
+      .range([0, innerW])
+      .padding(0.08);
+
+    const yBand = d3
+      .scaleBand<ClassicalKawkabKey>()
+      .domain(SEVEN_KAWKAB_KEYS)
+      .range([0, innerH])
+      .padding(0.14);
+
+    const maxPct = Math.max(
+      14,
+      d3.max(dataset.summaries, (row) => d3.max(row.signDistributionPct) || 0) || 18
+    );
+
+    const colorScale = d3
+      .scaleSequential(
+        isNight
+          ? d3.interpolateRgb('#11192c', '#d9a441')
+          : d3.interpolateRgb('#f5efe2', '#b45309')
+      )
+      .domain([0, maxPct]);
+
+    // Top 12-Buruj column headers
+    const headerG = g.append('g');
+    ZODIAC_SIGNS.forEach((sign) => {
+      const cx = (xBand(sign.index) ?? 0) + xBand.bandwidth() / 2;
+      headerG
+        .append('text')
+        .attr('x', cx)
+        .attr('y', -14)
+        .attr('text-anchor', 'middle')
+        .attr('fill', isNight ? '#cbd5e1' : '#4a3f31')
+        .attr('font-size', isCompact ? '11px' : '12px')
+        .text(sign.symbol);
+
+      if (!isCompact) {
+        headerG
+          .append('text')
+          .attr('x', cx)
+          .attr('y', -3)
+          .attr('text-anchor', 'middle')
+          .attr('fill', isNight ? '#94a3b8' : '#6b5c48')
+          .attr('font-size', '9px')
+          .attr('font-family', 'ui-monospace, SFMono-Regular, monospace')
+          .text(sign.latinName.slice(0, 3));
+      }
+    });
+
+    // Left Kawkab row labels
+    dataset.summaries.forEach((row) => {
+      const meta = KAWKAB_META[row.key];
+      const cy = (yBand(row.key) ?? 0) + yBand.bandwidth() / 2;
+      g.append('text')
+        .attr('x', -10)
+        .attr('y', cy + 4)
+        .attr('text-anchor', 'end')
+        .attr('fill', getPlanetColor(row.key))
+        .attr('font-size', isCompact ? '10.5px' : '11.5px')
+        .attr('font-weight', '700')
+        .text(isCompact ? `${meta.symbol} ${meta.transliteration.slice(0, 6)}` : `${meta.symbol} ${meta.transliteration}`);
+
+      // 12 sign occupancy cells
+      row.signDistributionPct.forEach((pct, signIndex) => {
+        const cellX = xBand(signIndex) ?? 0;
+        const cellY = yBand(row.key) ?? 0;
+        const cellW = xBand.bandwidth();
+        const cellH = yBand.bandwidth();
+
+        const rect = g
+          .append('rect')
+          .attr('x', cellX)
+          .attr('y', cellY)
+          .attr('width', cellW)
+          .attr('height', cellH)
+          .attr('rx', 5)
+          .attr('fill', colorScale(pct))
+          .attr('stroke', isNight ? 'rgba(255,255,255,0.06)' : 'rgba(44,36,25,0.1)')
+          .attr('stroke-width', 1)
+          .style('cursor', 'pointer')
+          .on('mouseenter', function () {
+            d3.select(this).attr('stroke', '#f59e0b').attr('stroke-width', 1.8);
+            setHoveredHeatmapCell({ planet: row.key, signIndex, pct });
+          })
+          .on('mouseleave', function () {
+            d3.select(this)
+              .attr('stroke', isNight ? 'rgba(255,255,255,0.06)' : 'rgba(44,36,25,0.1)')
+              .attr('stroke-width', 1);
+            setHoveredHeatmapCell(null);
+          })
+          .on('click', () => {
+            setVisiblePlanets({
+              saturn: row.key === 'saturn',
+              jupiter: row.key === 'jupiter',
+              mars: row.key === 'mars',
+              sun: row.key === 'sun',
+              venus: row.key === 'venus',
+              mercury: row.key === 'mercury',
+              moon: row.key === 'moon',
+            });
+          });
+
+        rect.append('title').text(
+          `${meta.transliteration} di ${ZODIAC_SIGNS[signIndex].latinName}: ${pct}% dari 100 tahun`
+        );
+
+        if (!isCompact || cellW >= 26) {
+          const isHighIntensity = pct >= maxPct * 0.58;
+          g.append('text')
+            .attr('x', cellX + cellW / 2)
+            .attr('y', cellY + cellH / 2 + 3.5)
+            .attr('text-anchor', 'middle')
+            .attr('pointer-events', 'none')
+            .attr(
+              'fill',
+              isHighIntensity
+                ? isNight
+                  ? '#090d16'
+                  : '#ffffff'
+                : isNight
+                ? 'rgba(226, 232, 240, 0.85)'
+                : 'rgba(44, 36, 25, 0.85)'
+            )
+            .attr('font-size', isCompact ? '8.5px' : '9.5px')
+            .attr('font-family', 'ui-monospace, SFMono-Regular, monospace')
+            .attr('font-weight', isHighIntensity ? '700' : '500')
+            .text(`${pct.toFixed(0)}%`);
+        }
+      });
+    });
+  }, [dataset.summaries, heatmapWidth, isNight]);
+
   const cardSurface = isNight
     ? 'bg-[#101624] border-[#212e46] text-[#e5dccb]'
     : 'bg-[#faf6ee] border-[#dacdb2] text-[#2c2419]';
@@ -691,7 +891,7 @@ export const PlanetaryHistoricalAnalysisView: React.FC<PlanetaryHistoricalAnalys
               Tren Historis Posisi 7 Kawkab ({dataset.startYear} – {dataset.endYear} M)
             </h1>
             <p className="text-xs sm:text-sm opacity-80 max-w-3xl leading-relaxed">
-              Visualisasi interaktif D3.js atas pergerakan bujur ekliptika, skor martabat (*Qūwah al-Kawkab*), dan siklus Konjungsi Agung (*Qirān*) ketujuh planet klasik selama 100 tahun ke belakang berdasarkan ephemeris *Zij as-Sindhind*.
+              Visualisasi interaktif D3.js atas pergerakan bujur ekliptika, skor martabat (<em>Qūwah al-Kawkab</em>), peta distribusi 12 Buruj, dan siklus Konjungsi Agung (<em>Qirān</em>) ketujuh planet klasik selama 100 tahun ke belakang berdasarkan ephemeris <em>Zij as-Sindhind</em>.
             </p>
           </div>
 
@@ -813,6 +1013,27 @@ export const PlanetaryHistoricalAnalysisView: React.FC<PlanetaryHistoricalAnalys
                 </button>
               ))}
             </div>
+
+            <form onSubmit={handleJumpToYear} className="flex items-center gap-1">
+              <input
+                type="number"
+                min={dataset.startYear}
+                max={dataset.endYear}
+                value={jumpYearInput}
+                onChange={(e) => setJumpYearInput(e.target.value)}
+                placeholder={`${dataset.startYear}–${dataset.endYear}`}
+                aria-label="Lompat ke tahun historis"
+                className={`w-28 min-h-[40px] px-2.5 py-1 rounded-xl border text-xs font-mono tabular-nums ${subSurface}`}
+              />
+              <button
+                type="submit"
+                className={`min-h-[40px] px-2.5 py-1 rounded-xl border text-xs font-semibold inline-flex items-center gap-1 cursor-pointer ${subSurface} hover:border-amber-500`}
+                title="Zoom ke tahun historis tertentu"
+              >
+                <Search className="w-3.5 h-3.5 text-amber-500" />
+                <span>Cari</span>
+              </button>
+            </form>
           </div>
         </div>
 
@@ -1157,7 +1378,7 @@ export const PlanetaryHistoricalAnalysisView: React.FC<PlanetaryHistoricalAnalys
               Ringkasan Statistik 100 Tahun (7 Kawkab)
             </h2>
             <p className="text-[11px] opacity-75">
-              Rerata martabat, puncak kekuatan (*Sharaf/Bayt*), estimasi putaran revolusi zodiak, dan rasio *Iḥtirāq*.
+              Rerata martabat, puncak kekuatan (<em>Sharaf/Bayt</em>), estimasi putaran revolusi zodiak, dan rasio <em>Iḥtirāq</em>.
             </p>
           </div>
 
@@ -1223,6 +1444,38 @@ export const PlanetaryHistoricalAnalysisView: React.FC<PlanetaryHistoricalAnalys
               </tbody>
             </table>
           </div>
+        </div>
+      </div>
+
+      {/* D3.JS 100-YEAR BURUJ OCCUPANCY HEATMAP (7 KAWKAB × 12 BURUJ) */}
+      <div className={`rounded-2xl border p-4 sm:p-5 space-y-3 ${cardSurface}`}>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-current/10 pb-3">
+          <div>
+            <h2 className="text-sm sm:text-base font-serif font-bold flex items-center gap-2">
+              <Grid3X3 className="w-4 h-4 text-amber-500" />
+              <span>Peta Distribusi 12 Buruj 100 Tahun (D3.js Heatmap)</span>
+            </h2>
+            <p className="text-[11px] opacity-75">
+              Persentase durasi keberadaan tiap kawkab di 12 rasi zodiak ({dataset.startYear}–{dataset.endYear} M). Klik sel mana pun untuk memfokuskan kurva planet tersebut di grafik utama.
+            </p>
+          </div>
+          <div className="text-xs font-mono tabular-nums opacity-85">
+            {hoveredHeatmapCell ? (
+              <span>
+                {KAWKAB_META[hoveredHeatmapCell.planet].symbol}{' '}
+                {KAWKAB_META[hoveredHeatmapCell.planet].transliteration} ·{' '}
+                {ZODIAC_SIGNS[hoveredHeatmapCell.signIndex].symbol}{' '}
+                {ZODIAC_SIGNS[hoveredHeatmapCell.signIndex].latinName}:{' '}
+                <strong className="text-amber-500">{hoveredHeatmapCell.pct.toFixed(1)}%</strong>
+              </span>
+            ) : (
+              <span>7 Kawkab × 12 Buruj</span>
+            )}
+          </div>
+        </div>
+
+        <div ref={heatmapWrapperRef} className={`w-full rounded-xl border p-2 overflow-hidden ${subSurface}`}>
+          <svg ref={heatmapSvgRef} className="w-full block select-none" />
         </div>
       </div>
     </div>

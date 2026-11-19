@@ -172,6 +172,7 @@ export interface KawkabCenturySummary {
   minDignityYear: number;
   dominantSignIndex: number;
   dominantSignLabel: string;
+  signDistributionPct: number[];
   combustionRatioPct: number;
   estimatedRevolutions: number;
   latestLongitude: number;
@@ -366,9 +367,14 @@ export function generateCenturyPlanetaryAnalysis(params: {
     const latest = points[points.length - 1].planets[key];
     const meta = KAWKAB_META[key];
 
+    const totalSamples = Math.max(1, points.length);
+    const signDistributionPct = signHistogram.map((count) =>
+      Number(((count / totalSamples) * 100).toFixed(1))
+    );
+
     return {
       key,
-      avgDignity: Number((dignitySum / Math.max(1, points.length)).toFixed(2)),
+      avgDignity: Number((dignitySum / totalSamples).toFixed(2)),
       maxDignity,
       maxDignityYear,
       maxDignitySign: `${ZODIAC_SIGNS[maxDignitySignIndex].symbol} ${ZODIAC_SIGNS[maxDignitySignIndex].latinName}`,
@@ -376,7 +382,8 @@ export function generateCenturyPlanetaryAnalysis(params: {
       minDignityYear,
       dominantSignIndex,
       dominantSignLabel: `${ZODIAC_SIGNS[dominantSignIndex].symbol} ${ZODIAC_SIGNS[dominantSignIndex].latinName}`,
-      combustionRatioPct: Number(((combustCount / Math.max(1, points.length)) * 100).toFixed(1)),
+      signDistributionPct,
+      combustionRatioPct: Number(((combustCount / totalSamples) * 100).toFixed(1)),
       estimatedRevolutions: Number((yearsBack / meta.orbitalPeriodYears).toFixed(1)),
       latestLongitude: latest.longitude,
       latestSignLabel: `${ZODIAC_SIGNS[latest.signIndex].symbol} ${latest.signDegree}° ${ZODIAC_SIGNS[latest.signIndex].latinName}`,

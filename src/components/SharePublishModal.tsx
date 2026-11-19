@@ -19,6 +19,15 @@ import {
   Moon,
   Sun,
   FileJson,
+  Rocket,
+  Loader2,
+  Server,
+  RefreshCw,
+  Trash2,
+  Terminal,
+  Lock,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { ThemeMode } from '../types';
 import {
@@ -51,6 +60,41 @@ interface SharePublishModalProps {
 }
 
 const SID_LINK_STORAGE_KEY = 'sindhind_custom_sid_link_v1';
+const SID_HISTORY_STORAGE_KEY = 'sindhind_sid_published_history_v1';
+
+interface PublishedSidEntry {
+  shortUrl: string;
+  longUrl: string;
+  slug: string;
+  createdAt: string;
+  normalizedFromEditor?: boolean;
+}
+
+interface SidProxyStatusInfo {
+  configured: boolean;
+  sidApiConnected?: boolean;
+  authMode: 'v2_bearer' | 'v1_legacy' | 'auto_builtin' | 'none';
+  appletId: string;
+  upstreamBase: string;
+  suggestedPublicUrl: string;
+  proxyBaseUrl: string;
+  security: {
+    rateLimitPerMinute: number;
+    ssrfGuard: boolean;
+    noStoreCache: boolean;
+    externalProxyTokenEnabled: boolean;
+  };
+  endpoints: string[];
+}
+
+interface RemoteSidLink {
+  id: string;
+  shortUrl: string;
+  slug: string;
+  longUrl: string;
+  clicks?: number;
+  createdAt: string;
+}
 
 export const SharePublishModal: React.FC<SharePublishModalProps> = ({
   isOpen,
@@ -76,6 +120,37 @@ export const SharePublishModal: React.FC<SharePublishModalProps> = ({
       return localStorage.getItem(SID_LINK_STORAGE_KEY) || 'https://s.id/zij-sindhind';
     } catch {
       return 'https://s.id/zij-sindhind';
+    }
+  });
+
+  // Automated s.id API v2 publishing & Secure Proxy Server states
+  const [sidServerConfigured, setSidServerConfigured] = useState<boolean | null>(null);
+  const [sidAuthMode, setSidAuthMode] = useState<'v2_bearer' | 'v1_legacy' | 'auto_builtin' | 'none'>('auto_builtin');
+  const [sidProxyStatus, setSidProxyStatus] = useState<SidProxyStatusInfo | null>(null);
+  const [autoSlugInput, setAutoSlugInput] = useState<string>('zij-sindhind');
+  const [targetUrlInput, setTargetUrlInput] = useState<string>('');
+  const [isPublishingSid, setIsPublishingSid] = useState<boolean>(false);
+  const [sidPublishSuccess, setSidPublishSuccess] = useState<PublishedSidEntry | null>(null);
+  const [sidPublishError, setSidPublishError] = useState<string | null>(null);
+  const [sidNeedsSecretGuide, setSidNeedsSecretGuide] = useState<boolean>(false);
+  const [copiedProxyUrl, setCopiedProxyUrl] = useState<boolean>(false);
+  const [copiedSnippet, setCopiedSnippet] = useState<boolean>(false);
+  const [showIntegrationSnippets, setShowIntegrationSnippets] = useState<boolean>(false);
+  const [snippetTab, setSnippetTab] = useState<'curl' | 'gas'>('curl');
+  const [remoteLinks, setRemoteLinks] = useState<RemoteSidLink[]>([]);
+  const [hasLoadedRemoteLinks, setHasLoadedRemoteLinks] = useState<boolean>(false);
+  const [isLoadingRemoteLinks, setIsLoadingRemoteLinks] = useState<boolean>(false);
+  const [remoteLinksError, setRemoteLinksError] = useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [deletingLinkId, setDeletingLinkId] = useState<string | null>(null);
+  const [publishedHistory, setPublishedHistory] = useState<PublishedSidEntry[]>(() => {
+    try {
+      const raw = localStorage.getItem(SID_HISTORY_STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.slice(0, 6) : [];
+    } catch {
+      return [];
     }
   });
 
@@ -109,8 +184,65 @@ export const SharePublishModal: React.FC<SharePublishModalProps> = ({
       setInventory(getLocalDataInventory());
       setActiveSection(initialSection);
       setBackupError(null);
+      setSidPublishError(null);
+      setTargetUrlInput((prev) => prev || suggestedShareUrl);
     }
-  }, [isOpen, initialSection]);
+  }, [isOpen, initialSection, suggestedShareUrl]);
+
+  useEffect(() => {
+    if (!isOpen || activeSection !== 'publish') return;
+    let cancelled = false;
+    fetch('/api/sid/status')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: Partial<SidProxyStatusInfo> | null) => {
+        if (cancelled || !data) return;
+        const resolvedAuthMode = data.authMode || 'auto_builtin';
+        setSidServerConfigured(data.configured !== false);
+        setSidAuthMode(resolvedAuthMode);
+        setSidProxyStatus({
+          configured: data.configured !== false,
+          sidApiConnected: Boolean(data.sidApiConnected),
+          authMode: resolvedAuthMode,
+          appletId: data.appletId || '7d916580-ae0d-474a-90e1-ecf48060f9ee',
+          upstreamBase: data.upstreamBase || `${suggestedShareUrl.replace(/\/$/, '')}/go`,
+          suggestedPublicUrl: data.suggestedPublicUrl || suggestedShareUrl,
+          proxyBaseUrl:
+            data.proxyBaseUrl ||
+            (suggestedShareUrl
+              ? `${suggestedShareUrl.replace(/\/$/, '')}/api/sid`
+              : '/api/sid'),
+          security: {
+            rateLimitPerMinute: data.security?.rateLimitPerMinute ?? 30,
+            ssrfGuard: data.security?.ssrfGuard ?? true,
+            noStoreCache: data.security?.noStoreCache ?? true,
+            externalProxyTokenEnabled: Boolean(data.security?.externalProxyTokenEnabled),
+          },
+          endpoints: Array.isArray(data.endpoints)
+            ? data.endpoints
+            : [
+                'GET /api/sid/health',
+                'GET /api/sid/status',
+                'POST /api/sid/publish',
+                'POST /api/sid/links',
+                'GET /api/sid/links',
+                'DELETE /api/sid/links/:id',
+                'GET /go/:slug',
+              ],
+        });
+        if (data.suggestedPublicUrl) {
+          setTargetUrlInput((prev) => prev || data.suggestedPublicUrl || suggestedShareUrl);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSidServerConfigured(true);
+          setSidAuthMode('auto_builtin');
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, activeSection, suggestedShareUrl]);
 
   useEffect(() => {
     try {
@@ -133,7 +265,44 @@ export const SharePublishModal: React.FC<SharePublishModalProps> = ({
     customSidSlug.trim() || suggestedShareUrl
   }`;
 
-  const handleCopy = async (text: string, target: 'app' | 'sid' | 'embed' | 'wa') => {
+  const effectivePublicUrl =
+    sidProxyStatus?.suggestedPublicUrl || suggestedShareUrl;
+  const effectiveProxyBaseUrl =
+    sidProxyStatus?.proxyBaseUrl ||
+    (effectivePublicUrl ? `${effectivePublicUrl.replace(/\/$/, '')}/api/sid` : '/api/sid');
+
+  const isTargetEditorUrl =
+    targetUrlInput.includes('aistudio.google.com/apps/') ||
+    targetUrlInput.includes('aistudio.google.com/app/') ||
+    targetUrlInput.includes('ais-dev-');
+
+  const curlProxySnippet = `curl -X POST "${effectiveProxyBaseUrl}/publish" \\
+  -H "Content-Type: application/json" \\${
+    sidProxyStatus?.security.externalProxyTokenEnabled
+      ? '\n  -H "X-Proxy-Token: <SID_PROXY_TOKEN>" \\'
+      : ''
+  }
+  -d '{"longUrl":"${effectivePublicUrl || 'https://example.com'}","customSlug":"zij-sindhind"}'`;
+
+  const gasProxySnippet = `function buatShortlinkSid(longUrl, customSlug) {
+  var endpoint = '${effectiveProxyBaseUrl}/publish';
+  var headers = { 'Content-Type': 'application/json' };
+  // Jika SID_PROXY_TOKEN aktif di Secrets server, tambahkan:
+  // headers['X-Proxy-Token'] = PropertiesService.getScriptProperties().getProperty('SID_PROXY_TOKEN');
+  var resp = UrlFetchApp.fetch(endpoint, {
+    method: 'post',
+    contentType: 'application/json',
+    headers: headers,
+    payload: JSON.stringify({ longUrl: longUrl, customSlug: customSlug || '' }),
+    muteHttpExceptions: true
+  });
+  return JSON.parse(resp.getContentText());
+}`;
+
+  const handleCopy = async (
+    text: string,
+    target: 'app' | 'sid' | 'embed' | 'wa' | 'proxy' | 'snippet'
+  ) => {
     try {
       await navigator.clipboard.writeText(text);
       if (target === 'app') {
@@ -145,6 +314,12 @@ export const SharePublishModal: React.FC<SharePublishModalProps> = ({
       } else if (target === 'embed') {
         setCopiedEmbed(true);
         setTimeout(() => setCopiedEmbed(false), 2000);
+      } else if (target === 'proxy') {
+        setCopiedProxyUrl(true);
+        setTimeout(() => setCopiedProxyUrl(false), 2000);
+      } else if (target === 'snippet') {
+        setCopiedSnippet(true);
+        setTimeout(() => setCopiedSnippet(false), 2000);
       } else {
         setCopiedWaText(true);
         setTimeout(() => setCopiedWaText(false), 2000);
@@ -222,6 +397,146 @@ export const SharePublishModal: React.FC<SharePublishModalProps> = ({
     };
     reader.readAsText(file);
     event.target.value = '';
+  };
+
+  const handleAutoPublishSid = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanedLongUrl = (targetUrlInput.trim() || suggestedShareUrl).trim();
+    const cleanedSlug = autoSlugInput
+      .trim()
+      .replace(/^https?:\/\/(www\.)?s\.id\//i, '')
+      .replace(/[^a-zA-Z0-9_-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+
+    setIsPublishingSid(true);
+    setSidPublishError(null);
+    setSidPublishSuccess(null);
+    setSidNeedsSecretGuide(false);
+
+    try {
+      const resp = await fetch('/api/sid/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          longUrl: cleanedLongUrl,
+          customSlug: cleanedSlug || undefined,
+        }),
+      });
+
+      const data = (await resp.json()) as {
+        success?: boolean;
+        code?: string;
+        message?: string;
+        shortUrl?: string;
+        slug?: string;
+        longUrl?: string;
+        normalizedFromEditor?: boolean;
+        createdAt?: string;
+      };
+
+      if (!resp.ok || !data.success || !data.shortUrl) {
+        if (data.code === 'SID_API_KEY_MISSING') {
+          setSidNeedsSecretGuide(true);
+          setSidServerConfigured(false);
+        }
+        setSidPublishError(
+          data.message || 'Gagal menerbitkan tautan ke s.id. Periksa konfigurasi server.'
+        );
+        return;
+      }
+
+      const entry: PublishedSidEntry = {
+        shortUrl: data.shortUrl,
+        longUrl: data.longUrl || cleanedLongUrl,
+        slug: data.slug || cleanedSlug,
+        createdAt: data.createdAt || new Date().toISOString(),
+        normalizedFromEditor: Boolean(data.normalizedFromEditor),
+      };
+
+      setSidPublishSuccess(entry);
+      setCustomSidSlug(entry.shortUrl);
+      setSidServerConfigured(true);
+
+      const nextHistory = [
+        entry,
+        ...publishedHistory.filter((item) => item.shortUrl !== entry.shortUrl),
+      ].slice(0, 6);
+      setPublishedHistory(nextHistory);
+      try {
+        localStorage.setItem(SID_HISTORY_STORAGE_KEY, JSON.stringify(nextHistory));
+      } catch {
+        // ignore storage quota errors
+      }
+    } catch (err) {
+      setSidPublishError(
+        err instanceof Error
+          ? `Koneksi ke endpoint /api/sid/publish gagal: ${err.message}`
+          : 'Koneksi ke endpoint /api/sid/publish gagal.'
+      );
+    } finally {
+      setIsPublishingSid(false);
+    }
+  };
+
+  const handleFetchRemoteLinks = async () => {
+    setIsLoadingRemoteLinks(true);
+    setRemoteLinksError(null);
+    setPendingDeleteId(null);
+    try {
+      const resp = await fetch('/api/sid/links?page=1&limit=15');
+      const data = (await resp.json()) as {
+        success?: boolean;
+        code?: string;
+        message?: string;
+        links?: RemoteSidLink[];
+      };
+      if (!resp.ok || !data.success) {
+        if (data.code === 'SID_API_KEY_MISSING') {
+          setSidNeedsSecretGuide(true);
+          setSidServerConfigured(false);
+        }
+        setRemoteLinksError(data.message || 'Gagal memuat daftar tautan dari server s.id.');
+        return;
+      }
+      setRemoteLinks(Array.isArray(data.links) ? data.links : []);
+      setHasLoadedRemoteLinks(true);
+      setSidServerConfigured(true);
+    } catch (err) {
+      setRemoteLinksError(
+        err instanceof Error
+          ? `Koneksi ke /api/sid/links gagal: ${err.message}`
+          : 'Koneksi ke /api/sid/links gagal.'
+      );
+    } finally {
+      setIsLoadingRemoteLinks(false);
+    }
+  };
+
+  const handleDeleteRemoteLink = async (linkId: string) => {
+    if (!linkId) return;
+    setDeletingLinkId(linkId);
+    setRemoteLinksError(null);
+    try {
+      const resp = await fetch(`/api/sid/links/${encodeURIComponent(linkId)}`, {
+        method: 'DELETE',
+      });
+      const data = (await resp.json()) as { success?: boolean; message?: string };
+      if (!resp.ok || !data.success) {
+        setRemoteLinksError(data.message || 'Gagal menghapus tautan di s.id.');
+        return;
+      }
+      setRemoteLinks((prev) => prev.filter((item) => item.id !== linkId));
+      setPendingDeleteId(null);
+    } catch (err) {
+      setRemoteLinksError(
+        err instanceof Error
+          ? `Koneksi DELETE /api/sid/links gagal: ${err.message}`
+          : 'Gagal menghapus tautan di s.id.'
+      );
+    } finally {
+      setDeletingLinkId(null);
+    }
   };
 
   const handleConfirmRestore = () => {
@@ -695,14 +1010,522 @@ export const SharePublishModal: React.FC<SharePublishModalProps> = ({
             </div>
           )}
 
-          {/* ==================== SECTION 3: PUBLIKASI s.id ==================== */}
+          {/* ==================== SECTION 3: PROXY AMAN & PUBLIKASI s.id ==================== */}
           {activeSection === 'publish' && (
-            <div className={`p-4 rounded-2xl border space-y-3.5 ${panelClass}`}>
+            <div className="space-y-4">
+              {/* Secure s.id Proxy Server Dashboard Card */}
+              <div className={`p-4 rounded-2xl border space-y-3.5 ${panelClass}`}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Server className="w-4 h-4 text-[#c59a43] shrink-0" />
+                    <h3 className="font-serif font-bold text-sm">
+                      Proxy Server Aman untuk API s.id
+                    </h3>
+                  </div>
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+                      sidServerConfigured !== false
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                    }`}
+                  >
+                    {sidServerConfigured === null
+                      ? 'Memeriksa Proxy...'
+                      : sidAuthMode === 'v2_bearer'
+                      ? 'Proxy Aktif (API s.id v2)'
+                      : sidAuthMode === 'v1_legacy'
+                      ? 'Proxy Aktif (API s.id v1)'
+                      : 'Proxy Aktif (Otomatis • Tanpa Secret)'}
+                  </span>
+                </div>
+
+                <p className="text-xs opacity-80 leading-relaxed">
+                  {sidAuthMode === 'v2_bearer' || sidAuthMode === 'v1_legacy' ? (
+                    <>
+                      Server aplikasi ini meneruskan permintaan ke{' '}
+                      <code className="font-mono">{sidProxyStatus?.upstreamBase || 'https://api.s.id/v2'}</code>{' '}
+                      secara aman di sisi server tanpa membocorkan kredensial ke browser.
+                    </>
+                  ) : (
+                    <>
+                      Mode <strong>Otomatis (Zero-Config)</strong> aktif tanpa perlu mengisi variabel lingkungan apa pun — shortlink langsung dibuat dan dialihkan via{' '}
+                      <code className="font-mono">/go/:slug</code>. Jika nanti Anda menambahkan Secret opsional <code className="font-mono">SID_API_KEY</code>, proxy otomatis beralih ke domain <code className="font-mono">s.id</code>.
+                    </>
+                  )}
+                </p>
+
+                {/* Public Proxy Base URL */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-semibold opacity-80 block">
+                    Base URL Proxy Aman s.id (Untuk Aplikasi, Google Apps Script &amp; cURL):
+                  </label>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={effectiveProxyBaseUrl}
+                      className={`flex-1 min-h-[42px] px-3 py-1.5 rounded-xl border text-xs font-mono select-all ${subCardClass}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(effectiveProxyBaseUrl, 'proxy')}
+                      className="min-h-[42px] px-3.5 py-1.5 rounded-xl bg-[#c59a43] hover:bg-[#d4a84e] text-black text-xs font-bold inline-flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+                    >
+                      {copiedProxyUrl ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                      <span>{copiedProxyUrl ? 'Tersalin' : 'Salin Base URL'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Security Hardening Matrix */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                  <div className={`p-2.5 rounded-xl border ${subCardClass}`}>
+                    <div className="opacity-65 flex items-center gap-1">
+                      <Lock className="w-3 h-3 text-emerald-500" />
+                      <span>Mode Proxy</span>
+                    </div>
+                    <div className="font-mono font-bold mt-0.5 text-emerald-500">
+                      {sidAuthMode === 'v2_bearer'
+                        ? 's.id Bearer'
+                        : sidAuthMode === 'v1_legacy'
+                        ? 's.id v1'
+                        : 'Auto Built-In'}
+                    </div>
+                  </div>
+                  <div className={`p-2.5 rounded-xl border ${subCardClass}`}>
+                    <div className="opacity-65">Rate Limit</div>
+                    <div className="font-mono font-bold mt-0.5 tabular-nums">
+                      {sidProxyStatus?.security.rateLimitPerMinute ?? 30} req/mnt
+                    </div>
+                  </div>
+                  <div className={`p-2.5 rounded-xl border ${subCardClass}`}>
+                    <div className="opacity-65">Pelindung URL</div>
+                    <div className="font-mono font-bold mt-0.5 text-emerald-500">SSRF Guard</div>
+                  </div>
+                  <div className={`p-2.5 rounded-xl border ${subCardClass}`}>
+                    <div className="opacity-65">Token Eksternal</div>
+                    <div className="font-mono font-bold mt-0.5">
+                      {sidProxyStatus?.security.externalProxyTokenEnabled ? 'Aktif' : 'Opsional'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Endpoint Directory & Integration Snippets Toggle */}
+                <div className="pt-2 border-t border-current/10 space-y-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-[11px] font-semibold opacity-80">
+                      Endpoint Proxy Tersedia:
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowIntegrationSnippets((prev) => !prev)}
+                      className={`min-h-[34px] px-2.5 py-1 rounded-lg border text-[11px] font-semibold inline-flex items-center gap-1.5 cursor-pointer ${subCardClass} hover:border-[#c59a43]`}
+                    >
+                      <Terminal className="w-3.5 h-3.5 text-[#c59a43]" />
+                      <span>Contoh cURL &amp; Apps Script</span>
+                      {showIntegrationSnippets ? (
+                        <ChevronUp className="w-3.5 h-3.5" />
+                      ) : (
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px] font-mono">
+                    {(
+                      sidProxyStatus?.endpoints || [
+                        'GET /api/sid/health',
+                        'GET /api/sid/status',
+                        'POST /api/sid/publish',
+                        'POST /api/sid/links',
+                        'GET /api/sid/links',
+                        'DELETE /api/sid/links/:id',
+                      ]
+                    ).map((ep) => (
+                      <div
+                        key={ep}
+                        className={`px-2.5 py-1.5 rounded-lg border truncate ${subCardClass}`}
+                      >
+                        {ep}
+                      </div>
+                    ))}
+                  </div>
+
+                  {showIntegrationSnippets && (
+                    <div className={`p-3 rounded-xl border space-y-2.5 ${subCardClass}`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setSnippetTab('curl')}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border cursor-pointer ${
+                              snippetTab === 'curl'
+                                ? 'bg-[#c59a43] text-black border-[#c59a43]'
+                                : 'border-current/20 opacity-80'
+                            }`}
+                          >
+                            cURL
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSnippetTab('gas')}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border cursor-pointer ${
+                              snippetTab === 'gas'
+                                ? 'bg-[#c59a43] text-black border-[#c59a43]'
+                                : 'border-current/20 opacity-80'
+                            }`}
+                          >
+                            Google Apps Script
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleCopy(
+                              snippetTab === 'curl' ? curlProxySnippet : gasProxySnippet,
+                              'snippet'
+                            )
+                          }
+                          className="min-h-[32px] px-2.5 py-1 rounded-lg border border-current/20 hover:border-[#c59a43] text-[11px] font-semibold inline-flex items-center gap-1 cursor-pointer"
+                        >
+                          {copiedSnippet ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-500" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                          <span>{copiedSnippet ? 'Disalin' : 'Salin Kode'}</span>
+                        </button>
+                      </div>
+                      <pre className="p-2.5 rounded-lg bg-black/25 border border-current/10 text-[11px] font-mono overflow-x-auto leading-relaxed select-all whitespace-pre-wrap break-all">
+                        {snippetTab === 'curl' ? curlProxySnippet : gasProxySnippet}
+                      </pre>
+                      <p className="text-[11px] opacity-75 leading-relaxed">
+                        Opsional: tambahkan Secret <code className="font-mono">SID_PROXY_TOKEN</code> dan{' '}
+                        <code className="font-mono">SID_ALLOWED_ORIGINS</code> di AI Studio jika ingin membatasi panggilan lintas-origin.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Automated s.id API v2 Publisher */}
+              <form
+                onSubmit={handleAutoPublishSid}
+                className={`p-4 rounded-2xl border space-y-3.5 ${panelClass}`}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Rocket className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <h3 className="font-serif font-bold text-sm">
+                      Buat Tautan Pendek s.id via Proxy Aman
+                    </h3>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+                  <div className="sm:col-span-7 space-y-1">
+                    <label htmlFor="sid-auto-long-url" className="text-[11px] font-semibold opacity-80 block">
+                      URL Publik Tujuan:
+                    </label>
+                    <input
+                      id="sid-auto-long-url"
+                      type="url"
+                      required
+                      value={targetUrlInput || effectivePublicUrl}
+                      onChange={(e) => setTargetUrlInput(e.target.value)}
+                      placeholder="https://ais-pre-...run.app/"
+                      className={`w-full min-h-[42px] px-3 py-1.5 rounded-xl border text-xs font-mono ${subCardClass}`}
+                    />
+                  </div>
+                  <div className="sm:col-span-5 space-y-1">
+                    <label htmlFor="sid-auto-slug" className="text-[11px] font-semibold opacity-80 block">
+                      Custom Alias (Opsional):
+                    </label>
+                    <div className={`flex items-center rounded-xl border overflow-hidden ${subCardClass}`}>
+                      <span className="px-2.5 text-[11px] font-mono opacity-65 select-none border-r border-current/10">
+                        {sidAuthMode === 'auto_builtin' ? '/go/' : 's.id/'}
+                      </span>
+                      <input
+                        id="sid-auto-slug"
+                        type="text"
+                        value={autoSlugInput}
+                        onChange={(e) => setAutoSlugInput(e.target.value)}
+                        placeholder="zij-sindhind"
+                        className="w-full min-h-[40px] px-2.5 py-1.5 bg-transparent text-xs font-mono outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Helper when AI Studio editor/dev URL is pasted */}
+                {isTargetEditorUrl && effectivePublicUrl && (
+                  <div className="p-2.5 rounded-xl border border-amber-500/35 bg-amber-500/10 text-xs flex flex-wrap items-center justify-between gap-2">
+                    <span className="opacity-90 leading-snug">
+                      URL editor AI Studio terdeteksi. Proxy akan otomatis mengarahkannya ke URL publik Shared App agar bisa diakses umum.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setTargetUrlInput(effectivePublicUrl)}
+                      className="min-h-[34px] px-2.5 py-1 rounded-lg bg-[#c59a43] text-black text-[11px] font-bold shrink-0 cursor-pointer"
+                    >
+                      Gunakan URL Publik
+                    </button>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  <span className="text-[11px] opacity-75">
+                    Kosongkan alias jika ingin slug acak otomatis dari s.id.
+                  </span>
+                  <button
+                    type="submit"
+                    disabled={isPublishingSid}
+                    className="min-h-[44px] px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold inline-flex items-center gap-2 cursor-pointer disabled:opacity-60 transition-colors"
+                  >
+                    {isPublishingSid ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Rocket className="w-4 h-4" />
+                    )}
+                    <span>
+                      {isPublishingSid ? 'Menerbitkan via Proxy...' : 'Publish Otomatis ke s.id'}
+                    </span>
+                  </button>
+                </div>
+
+                {/* Published Success Banner */}
+                {sidPublishSuccess && (
+                  <div className="p-3.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 space-y-2 text-xs">
+                    <div className="flex items-center gap-2 font-bold text-emerald-500">
+                      <CheckCircle2 className="w-4 h-4 shrink-0" />
+                      <span>Berhasil Dipublikasikan ke s.id via Proxy Aman!</span>
+                    </div>
+                    {sidPublishSuccess.normalizedFromEditor && (
+                      <div className="text-[11px] opacity-85">
+                        URL editor AI Studio otomatis dinormalisasi ke tautan publik:{' '}
+                        <code className="font-mono break-all">{sidPublishSuccess.longUrl}</code>
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <a
+                        href={sidPublishSuccess.shortUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-mono font-bold text-sm underline break-all"
+                      >
+                        {sidPublishSuccess.shortUrl}
+                      </a>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(sidPublishSuccess.shortUrl, 'sid')}
+                          className="min-h-[36px] px-3 py-1 rounded-lg bg-emerald-600 text-white font-semibold inline-flex items-center gap-1 cursor-pointer"
+                        >
+                          {copiedSidUrl ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{copiedSidUrl ? 'Tersalin' : 'Salin'}</span>
+                        </button>
+                        <a
+                          href={sidPublishSuccess.shortUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`min-h-[36px] px-3 py-1 rounded-lg border font-semibold inline-flex items-center gap-1 ${subCardClass}`}
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          <span>Buka</span>
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Error & Secret Setup Guidance */}
+                {sidPublishError && (
+                  <div className="p-3 rounded-xl border border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-300 text-xs flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{sidPublishError}</span>
+                  </div>
+                )}
+
+                {sidNeedsSecretGuide && (
+                  <div className={`p-3.5 rounded-xl border text-xs space-y-1.5 ${subCardClass}`}>
+                    <div className="font-bold text-amber-500 flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                      <span>Opsional: Hubungkan ke Domain Resmi s.id</span>
+                    </div>
+                    <p className="opacity-85 leading-relaxed">
+                      Proxy sudah berjalan otomatis tanpa variabel lingkungan apa pun. Jika ingin memakai domain <code className="font-mono">https://s.id/...</code>, cukup tambahkan satu Secret opsional <code className="font-mono font-bold">SID_API_KEY</code> dari{' '}
+                      <a
+                        href="https://home.s.id/developer"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline font-semibold text-emerald-500"
+                      >
+                        home.s.id → Developer
+                      </a>
+                      .
+                    </p>
+                  </div>
+                )}
+
+                {/* Recent Published History */}
+                {publishedHistory.length > 0 && (
+                  <div className="pt-2 border-t border-current/10 space-y-1.5">
+                    <div className="text-[11px] font-semibold opacity-75">
+                      Riwayat Tautan s.id Lokal ({publishedHistory.length}):
+                    </div>
+                    <div className="space-y-1.5">
+                      {publishedHistory.map((item) => (
+                        <div
+                          key={item.shortUrl}
+                          className={`px-3 py-2 rounded-xl border flex items-center justify-between gap-2 text-xs ${subCardClass}`}
+                        >
+                          <div className="min-w-0">
+                            <a
+                              href={item.shortUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-mono font-bold text-emerald-500 hover:underline block truncate"
+                            >
+                              {item.shortUrl}
+                            </a>
+                            <div className="text-[10px] opacity-65 font-mono truncate">
+                              {new Date(item.createdAt).toLocaleString('id-ID')}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(item.shortUrl, 'sid')}
+                            className="min-h-[34px] px-2.5 py-1 rounded-lg border border-current/15 hover:border-emerald-500 text-[11px] font-semibold shrink-0 cursor-pointer"
+                          >
+                            Salin
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </form>
+
+              {/* Live Server s.id Link Manager (GET /api/sid/links & DELETE /api/sid/links/:id) */}
+              <div className={`p-4 rounded-2xl border space-y-3 ${panelClass}`}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="space-y-0.5">
+                    <h3 className="font-serif font-bold text-sm">
+                      Kelola Tautan di Akun s.id (via Proxy)
+                    </h3>
+                    <p className="text-[11px] opacity-75">
+                      Muat atau hapus tautan langsung dari akun s.id melalui <code className="font-mono">GET/DELETE /api/sid/links</code>.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isLoadingRemoteLinks}
+                    onClick={() => void handleFetchRemoteLinks()}
+                    className={`min-h-[38px] px-3 py-1.5 rounded-xl border text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-60 ${subCardClass} hover:border-[#c59a43]`}
+                  >
+                    <RefreshCw
+                      className={`w-3.5 h-3.5 ${isLoadingRemoteLinks ? 'animate-spin' : ''}`}
+                    />
+                    <span>{isLoadingRemoteLinks ? 'Memuat...' : 'Muat Tautan s.id'}</span>
+                  </button>
+                </div>
+
+                {remoteLinksError && (
+                  <div className="p-2.5 rounded-xl border border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-300 text-xs flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{remoteLinksError}</span>
+                  </div>
+                )}
+
+                {hasLoadedRemoteLinks && remoteLinks.length === 0 && !remoteLinksError && (
+                  <div className={`p-3 rounded-xl border text-xs opacity-75 ${subCardClass}`}>
+                    Belum ada tautan yang ditemukan di akun s.id Anda.
+                  </div>
+                )}
+
+                {remoteLinks.length > 0 && (
+                  <div className="space-y-1.5 max-h-60 overflow-y-auto pr-0.5">
+                    {remoteLinks.map((link) => {
+                      const isConfirming = pendingDeleteId === link.id && Boolean(link.id);
+                      const isDeleting = deletingLinkId === link.id && Boolean(link.id);
+                      return (
+                        <div
+                          key={link.id || link.shortUrl}
+                          className={`p-2.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs ${subCardClass}`}
+                        >
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <a
+                                href={link.shortUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-mono font-bold text-emerald-500 hover:underline truncate"
+                              >
+                                {link.shortUrl}
+                              </a>
+                              {typeof link.clicks === 'number' && (
+                                <span className="text-[10px] font-mono opacity-70 tabular-nums shrink-0">
+                                  {link.clicks} klik
+                                </span>
+                              )}
+                            </div>
+                            {link.longUrl && (
+                              <div className="text-[10px] font-mono opacity-65 truncate">
+                                {link.longUrl}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleCopy(link.shortUrl, 'sid')}
+                              className="min-h-[32px] px-2.5 py-1 rounded-lg border border-current/15 hover:border-emerald-500 text-[11px] font-semibold cursor-pointer"
+                            >
+                              Salin
+                            </button>
+                            {link.id && !isConfirming && (
+                              <button
+                                type="button"
+                                onClick={() => setPendingDeleteId(link.id)}
+                                className="min-h-[32px] px-2 py-1 rounded-lg border border-rose-500/30 text-rose-500 hover:bg-rose-500/10 text-[11px] font-semibold inline-flex items-center gap-1 cursor-pointer"
+                                aria-label={`Hapus ${link.shortUrl}`}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {link.id && isConfirming && (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  disabled={isDeleting}
+                                  onClick={() => void handleDeleteRemoteLink(link.id)}
+                                  className="min-h-[32px] px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-bold cursor-pointer disabled:opacity-60"
+                                >
+                                  {isDeleting ? 'Menghapus...' : 'Hapus'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setPendingDeleteId(null)}
+                                  className="min-h-[32px] px-2 py-1 rounded-lg border border-current/20 text-[11px] cursor-pointer"
+                                >
+                                  Batal
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className={`p-4 rounded-2xl border space-y-3.5 ${panelClass}`}>
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Globe className="w-4 h-4 text-emerald-400" />
                   <h3 className="font-serif font-bold text-sm">
-                    Tautan Publik untuk Shortlink / Microsite s.id
+                    Tautan Publik, Microsite Embed &amp; Bagikan Manual s.id
                   </h3>
                 </div>
                 <span
@@ -947,6 +1770,7 @@ export const SharePublishModal: React.FC<SharePublishModalProps> = ({
                     </a>
                   )}
                 </div>
+              </div>
               </div>
             </div>
           )}

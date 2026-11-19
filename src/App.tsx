@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { AnimatePresence, motion, MotionConfig } from 'motion/react';
 import {
   HistoricalDateInfo,
   ResearchAnnotation,
@@ -56,7 +57,7 @@ import { AstrolabeManzilPowerChart } from './components/AstrolabeManzilPowerChar
 import { DashboardRingkasanView } from './components/DashboardRingkasanView';
 import { ExportPdfModal } from './components/ExportPdfModal';
 import { UserGuideModal } from './components/UserGuideModal';
-import { SharePublishModal } from './components/SharePublishModal';
+import { SharePublishModal, SettingsModalSection } from './components/SharePublishModal';
 import { InteractiveCompassHeader } from './components/InteractiveCompassHeader';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { OfflineIndicator } from './components/OfflineIndicator';
@@ -67,6 +68,7 @@ import {
   Menu,
   X,
   Settings,
+  Rocket,
   Moon,
   Sun,
   BookOpen,
@@ -125,6 +127,7 @@ export function App() {
     if (typeof window !== 'undefined') {
       const tabParam = new URLSearchParams(window.location.search).get('tab');
       if (tabParam === 'ritual') return 'ritual';
+      if (tabParam === 'planetary_analysis') return 'planetary_analysis';
     }
     return 'astrolabe';
   });
@@ -141,7 +144,14 @@ export function App() {
     getSavedArabicFontId()
   );
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
+  const [settingsModalSection, setSettingsModalSection] =
+    useState<SettingsModalSection>('backup');
   const [dataRefreshVersion, setDataRefreshVersion] = useState<number>(0);
+
+  const openSettingsModal = (section: SettingsModalSection) => {
+    setSettingsModalSection(section);
+    setIsShareModalOpen(true);
+  };
 
   // Keep Tailwind dark: variant and mobile status bar theme-color synchronized
   useEffect(() => {
@@ -544,15 +554,30 @@ export function App() {
               {/* Install PWA Button (Android / iOS / Desktop) */}
               <PWAInstallButton theme={theme} compact />
 
-              {/* Settings, Local JSON Backup, Arabic Font & s.id Publish Button */}
+              {/* 1-Click Publish Otomatis s.id Button */}
               <button
-                onClick={() => setIsShareModalOpen(true)}
+                onClick={() => openSettingsModal('publish')}
                 className={`hidden sm:inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors shadow-sm cursor-pointer ${
                   isNight
-                    ? 'bg-[#151c2e] hover:bg-[#202c46] border-emerald-500/35 text-emerald-300'
-                    : 'bg-[#ede5d5] hover:bg-[#e4dac6] border-emerald-600/35 text-emerald-800'
+                    ? 'bg-emerald-950/60 hover:bg-emerald-900/60 border-emerald-500/45 text-emerald-300'
+                    : 'bg-emerald-50 hover:bg-emerald-100 border-emerald-600/40 text-emerald-800'
                 }`}
-                title="Pengaturan Aplikasi, Backup Data Lokal (JSON), Font Arab & Publikasi s.id"
+                title="Publish Otomatis Shortlink s.id & Bagikan Aplikasi"
+                aria-label="Publish Otomatis s.id"
+              >
+                <Rocket className="w-3.5 h-3.5" />
+                <span className="hidden xl:inline">Publish s.id</span>
+              </button>
+
+              {/* Settings, Local JSON Backup, Arabic Font & s.id Publish Button */}
+              <button
+                onClick={() => openSettingsModal('backup')}
+                className={`hidden sm:inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors shadow-sm cursor-pointer ${
+                  isNight
+                    ? 'bg-[#151c2e] hover:bg-[#202c46] border-amber-500/35 text-amber-300'
+                    : 'bg-[#ede5d5] hover:bg-[#e4dac6] border-amber-600/35 text-amber-900'
+                }`}
+                title="Pengaturan Aplikasi, Backup Data Lokal (JSON) & Font Arab"
                 aria-label="Pengaturan dan Backup Data Lokal"
               >
                 <Settings className="w-3.5 h-3.5" />
@@ -706,7 +731,16 @@ export function App() {
           onToggleCompassSync={(synced) => setIsCompassSynced(synced)}
         />
 
-        <div key={activeTab} className="tab-panel-fade-in">
+        <MotionConfig reducedMotion="user">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+              className="will-change-[opacity,transform]"
+            >
         {activeTab === 'astrolabe' && (
           <div className="space-y-6">
             {/* View Mode Selector in Astrolabe Area */}
@@ -1096,7 +1130,9 @@ export function App() {
             initialTarget={annotationTarget}
           />
         )}
-        </div>
+            </motion.div>
+          </AnimatePresence>
+        </MotionConfig>
       </main>
 
       {/* Global Application Footer */}
@@ -1231,15 +1267,15 @@ export function App() {
               </button>
             </div>
 
-            {/* Mobile Quick Utility Actions (Panduan, s.id/Font, Ekspor PDF) */}
-            <div className="px-3 pt-3 pb-1 grid grid-cols-3 gap-2 shrink-0">
+            {/* Mobile Quick Utility Actions (Panduan, Publish s.id, Pengaturan, Ekspor PDF) */}
+            <div className="px-3 pt-3 pb-1 grid grid-cols-4 gap-1.5 shrink-0">
               <button
                 type="button"
                 onClick={() => {
                   setIsMobileMenuOpen(false);
                   setIsUserGuideOpen(true);
                 }}
-                className={`min-h-[48px] px-2 py-2 rounded-xl border text-[11px] font-semibold flex flex-col items-center justify-center gap-1 active:scale-95 transition-transform ${
+                className={`min-h-[48px] px-1.5 py-2 rounded-xl border text-[10px] font-semibold flex flex-col items-center justify-center gap-1 active:scale-95 transition-transform ${
                   isNight
                     ? 'bg-[#151e32] border-[#25344f] text-[#c59a43]'
                     : 'bg-[#f1e9d9] border-[#dacdb2] text-[#825c1d]'
@@ -1253,12 +1289,28 @@ export function App() {
                 type="button"
                 onClick={() => {
                   setIsMobileMenuOpen(false);
-                  setIsShareModalOpen(true);
+                  openSettingsModal('publish');
                 }}
-                className={`min-h-[48px] px-2 py-2 rounded-xl border text-[11px] font-semibold flex flex-col items-center justify-center gap-1 active:scale-95 transition-transform ${
+                className={`min-h-[48px] px-1.5 py-2 rounded-xl border text-[10px] font-semibold flex flex-col items-center justify-center gap-1 active:scale-95 transition-transform ${
                   isNight
-                    ? 'bg-[#151e32] border-emerald-500/35 text-emerald-300'
-                    : 'bg-[#f1e9d9] border-emerald-600/35 text-emerald-800'
+                    ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
+                    : 'bg-emerald-50 border-emerald-600/40 text-emerald-800'
+                }`}
+              >
+                <Rocket className="w-4 h-4" />
+                <span>Publish s.id</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  openSettingsModal('backup');
+                }}
+                className={`min-h-[48px] px-1.5 py-2 rounded-xl border text-[10px] font-semibold flex flex-col items-center justify-center gap-1 active:scale-95 transition-transform ${
+                  isNight
+                    ? 'bg-[#151e32] border-amber-500/35 text-amber-300'
+                    : 'bg-[#f1e9d9] border-amber-600/35 text-amber-900'
                 }`}
               >
                 <Settings className="w-4 h-4" />
@@ -1271,10 +1323,10 @@ export function App() {
                   setIsMobileMenuOpen(false);
                   setIsPdfModalOpen(true);
                 }}
-                className="min-h-[48px] px-2 py-2 rounded-xl bg-[#c59a43] text-black text-[11px] font-bold flex flex-col items-center justify-center gap-1 shadow-sm active:scale-95 transition-transform"
+                className="min-h-[48px] px-1.5 py-2 rounded-xl bg-[#c59a43] text-black text-[10px] font-bold flex flex-col items-center justify-center gap-1 shadow-sm active:scale-95 transition-transform"
               >
                 <FileDown className="w-4 h-4" />
-                <span>Ekspor PDF</span>
+                <span>PDF</span>
               </button>
             </div>
 
@@ -1323,6 +1375,7 @@ export function App() {
         onClose={() => setIsShareModalOpen(false)}
         theme={theme}
         arabicFontId={arabicFontId}
+        initialSection={settingsModalSection}
         onChangeArabicFont={(fontId) => setArabicFontId(fontId)}
         onChangeTheme={(nextTheme) => {
           setTheme(nextTheme);

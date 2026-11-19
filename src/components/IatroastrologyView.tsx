@@ -3,6 +3,7 @@ import {
   Activity,
   AlertTriangle,
   BookmarkPlus,
+  Calculator,
   CheckCircle2,
   ClipboardList,
   Droplets,
@@ -14,6 +15,7 @@ import {
   Stethoscope,
   Trash2,
 } from 'lucide-react';
+import { IatroastrologyJumalCalculator } from './IatroastrologyJumalCalculator';
 import {
   AspectRelation,
   HistoricalDateInfo,
@@ -69,7 +71,9 @@ export const IatroastrologyView: React.FC<IatroastrologyViewProps> = ({
 
   // Currently selected Kawkab in anatomical map / inspector
   const [selectedPlanet, setSelectedPlanet] = useState<PlanetKey>('sun');
-  const [activeSubSection, setActiveSubSection] = useState<'diagnosis' | 'buruj' | 'logger'>('diagnosis');
+  const [activeSubSection, setActiveSubSection] = useState<
+    'diagnosis' | 'jumal_medis' | 'buruj' | 'logger'
+  >('diagnosis');
 
   // Clinical Physical Symptom Logger states
   const [logs, setLogs] = useState<MedicalSymptomLog[]>(() => loadSymptomLogs());
@@ -200,6 +204,7 @@ export const IatroastrologyView: React.FC<IatroastrologyViewProps> = ({
           >
             {[
               { id: 'diagnosis' as const, label: 'Peta Organ & Kawkab', icon: Stethoscope },
+              { id: 'jumal_medis' as const, label: 'Hisab Jumal Nama', icon: Calculator },
               { id: 'buruj' as const, label: '12 Buruj & Hijamah', icon: Moon },
               { id: 'logger' as const, label: `Catat Keluhan (${logs.length})`, icon: ClipboardList },
             ].map((tab) => {
@@ -755,7 +760,32 @@ export const IatroastrologyView: React.FC<IatroastrologyViewProps> = ({
       )}
 
       {/* =================================================================== */}
-      {/* TAB 2: 12 BURUJ MELOTHESIA & AL-FASD WA AL-HIJAMAH PRECAUTIONS      */}
+      {/* TAB 2: KALKULATOR HISAB JUMAL KELUHAN PENYAKIT BERDASARKAN NAMA     */}
+      {/* =================================================================== */}
+      {activeSubSection === 'jumal_medis' && (
+        <IatroastrologyJumalCalculator
+          report={report}
+          currentDateInfo={currentDateInfo}
+          theme={theme}
+          onLogFromJumal={({ symptomTitle: title, planetKey, organTarget: organ, notes: noteText }) => {
+            setSymptomTitle(title);
+            setLogPlanetKey(planetKey);
+            setSelectedPlanet(planetKey);
+            setOrganTarget(organ);
+            setNotes(noteText);
+            setActiveSubSection('logger');
+            triggerToast('Hasil Hisab Jumal diisi ke formulir Catat Keluhan.');
+          }}
+          onInspectPlanet={(planetKey) => {
+            handleSelectPlanetFromChart(planetKey);
+            setActiveSubSection('diagnosis');
+          }}
+          onAnnotate={onAnnotate}
+        />
+      )}
+
+      {/* =================================================================== */}
+      {/* TAB 3: 12 BURUJ MELOTHESIA & AL-FASD WA AL-HIJAMAH PRECAUTIONS      */}
       {/* =================================================================== */}
       {activeSubSection === 'buruj' && (
         <section className={`rounded-2xl border p-4 sm:p-6 space-y-5 ${cardBg}`}>
