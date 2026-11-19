@@ -160,58 +160,63 @@ export const ExportPdfModal: React.FC<ExportPdfModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto"
+      onClick={onClose}
+    >
       <div
-        className={`w-full max-w-4xl rounded-2xl border shadow-2xl transition-all flex flex-col my-auto max-h-[92vh] ${
+        onClick={(e) => e.stopPropagation()}
+        className={`w-full sm:max-w-4xl rounded-t-3xl sm:rounded-2xl border shadow-2xl transition-all flex flex-col max-h-[92dvh] pb-safe ${
           isNight
             ? 'bg-[#121826] border-[#2c3d5e] text-[#e6ded0]'
             : 'bg-[#faf6ee] border-[#dfd5c0] text-[#2c241c]'
         }`}
       >
         {/* Modal Top Bar */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-current/10 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-[#c59a43]/20 border border-[#c59a43]/40 flex items-center justify-center text-[#c59a43]">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-current/10 shrink-0 gap-2">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-[#c59a43]/20 border border-[#c59a43]/40 flex items-center justify-center text-[#c59a43] shrink-0">
               <FileDown className="w-5 h-5" />
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h3 className="font-serif font-bold text-base tracking-wide">
-                  Panel Pengaturan Cetak Riset PDF (Pre-Print Customizer)
+                <h3 className="font-serif font-bold text-sm sm:text-base tracking-wide truncate">
+                  Pengaturan Cetak Riset PDF
                 </h3>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full font-bold bg-[#c59a43]/20 text-[#c59a43] border border-[#c59a43]/30">
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full font-bold bg-[#c59a43]/20 text-[#c59a43] border border-[#c59a43]/30 hidden sm:inline-block shrink-0">
                   Zij as-Sindhind
                 </span>
               </div>
-              <p className="text-xs opacity-75">
+              <p className="text-xs opacity-75 truncate">
                 Sesuaikan ukuran font, margin cetak, dan elemen visual sebelum mengunduh naskah.
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg opacity-70 hover:opacity-100 hover:bg-current/10 transition-colors"
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl opacity-75 hover:opacity-100 hover:bg-current/10 transition-colors shrink-0"
             title="Tutup"
+            aria-label="Tutup modal ekspor PDF"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Modal Body: Two Columns (Controls on Left, Live Mini-Preview on Right) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 p-6 overflow-y-auto min-h-0">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 p-4 sm:p-6 overflow-y-auto min-h-0">
           
           {/* Left Column: Customization Controls (7 Cols) */}
-          <div className="lg:col-span-7 flex flex-col space-y-4">
+          <div className="lg:col-span-7 flex flex-col space-y-4 min-w-0">
             {/* Sub-tab Navigation */}
             <div
-              className={`flex items-center p-1 rounded-xl border text-xs shrink-0 ${
+              className={`flex items-center p-1 rounded-xl border text-xs overflow-x-auto no-scrollbar max-w-full ${
                 isNight ? 'bg-[#0d121c] border-[#233148]' : 'bg-[#f2ece0] border-[#d8ccb0]'
               }`}
             >
               <button
                 type="button"
                 onClick={() => setActiveControlTab('layout')}
-                className={`flex-1 py-1.5 px-3 rounded-lg font-medium transition-all flex items-center justify-center gap-1.5 ${
+                className={`flex-1 min-h-[40px] sm:min-h-0 py-1.5 px-3 rounded-lg font-medium transition-all flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 ${
                   activeControlTab === 'layout'
                     ? 'bg-[#c59a43] text-black font-semibold shadow-sm'
                     : 'opacity-75 hover:opacity-100'

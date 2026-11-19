@@ -416,7 +416,7 @@ export const DashboardRingkasanView: React.FC<DashboardRingkasanViewProps> = ({
             <button
               type="button"
               onClick={() => onSelectDateStep(-1)}
-              className="px-2 py-0.5 rounded hover:bg-current/10 text-[11px] font-mono font-bold transition-colors"
+              className="min-h-[36px] sm:min-h-0 px-2.5 sm:px-2 py-1 sm:py-0.5 rounded hover:bg-current/10 text-[11px] font-mono font-bold transition-colors"
               title="Mundur 1 Jam"
             >
               -1j
@@ -425,7 +425,7 @@ export const DashboardRingkasanView: React.FC<DashboardRingkasanViewProps> = ({
               <button
                 type="button"
                 onClick={onResetToNow}
-                className="px-2 py-0.5 rounded hover:bg-[#c59a43]/20 text-[#c59a43] text-[11px] font-mono font-bold transition-colors"
+                className="min-h-[36px] sm:min-h-0 px-2.5 sm:px-2 py-1 sm:py-0.5 rounded hover:bg-[#c59a43]/20 text-[#c59a43] text-[11px] font-mono font-bold transition-colors"
                 title="Kembalikan ke Waktu Riil Sekarang"
               >
                 Sekarang
@@ -434,7 +434,7 @@ export const DashboardRingkasanView: React.FC<DashboardRingkasanViewProps> = ({
             <button
               type="button"
               onClick={() => onSelectDateStep(1)}
-              className="px-2 py-0.5 rounded hover:bg-current/10 text-[11px] font-mono font-bold transition-colors"
+              className="min-h-[36px] sm:min-h-0 px-2.5 sm:px-2 py-1 sm:py-0.5 rounded hover:bg-current/10 text-[11px] font-mono font-bold transition-colors"
               title="Maju 1 Jam"
             >
               +1j
@@ -445,12 +445,13 @@ export const DashboardRingkasanView: React.FC<DashboardRingkasanViewProps> = ({
           <button
             type="button"
             onClick={toggleCollapsed}
-            className={`p-1.5 rounded-lg border transition-colors ${
+            className={`min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0 flex items-center justify-center p-1.5 rounded-lg border transition-colors ${
               isNight
                 ? 'bg-[#151c2e] hover:bg-[#1d273f] border-[#25344f]'
                 : 'bg-[#ede5d5] hover:bg-[#e4dac6] border-[#dacdb2]'
             }`}
             title={isCollapsed ? 'Buka Panel Ringkasan Lengkap' : 'Ciutkan Panel'}
+            aria-label={isCollapsed ? 'Buka Panel Ringkasan Lengkap' : 'Ciutkan Panel'}
           >
             {isCollapsed ? <ChevronDown className="w-4 h-4 text-[#c59a43]" /> : <ChevronUp className="w-4 h-4" />}
           </button>
@@ -577,32 +578,32 @@ export const DashboardRingkasanView: React.FC<DashboardRingkasanViewProps> = ({
         <div className="p-4 sm:p-6 space-y-5 animate-in fade-in duration-200">
           {/* Subtabs Selector */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3 border-current/10">
-            <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-xl border bg-black/10 border-current/15 text-xs">
+            <div className="flex items-center gap-1.5 p-1 rounded-xl border bg-black/10 border-current/15 text-xs overflow-x-auto no-scrollbar max-w-full w-full sm:w-auto">
               <button
                 type="button"
                 onClick={() => setActiveMiniTab('planets')}
-                className={`px-3 py-1.5 rounded-lg font-serif font-semibold transition-all flex items-center gap-1.5 ${
+                className={`min-h-[40px] sm:min-h-0 px-3 py-1.5 rounded-lg font-serif font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                   activeMiniTab === 'planets'
                     ? 'bg-[#c59a43] text-black shadow-sm'
                     : 'opacity-70 hover:opacity-100'
                 }`}
               >
-                <Sun className="w-3.5 h-3.5" />
+                <Sun className="w-3.5 h-3.5 shrink-0" />
                 <span>Kondisi 7 Planet</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveMiniTab('aspects')}
-                className={`px-3 py-1.5 rounded-lg font-serif font-semibold transition-all flex items-center gap-1.5 ${
+                className={`min-h-[40px] sm:min-h-0 px-3 py-1.5 rounded-lg font-serif font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                   activeMiniTab === 'aspects'
                     ? 'bg-[#c59a43] text-black shadow-sm'
                     : 'opacity-70 hover:opacity-100'
                 }`}
               >
-                <Activity className="w-3.5 h-3.5" />
+                <Activity className="w-3.5 h-3.5 shrink-0" />
                 <span>Ringkasan Aspek</span>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20">
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20 tabular-nums">
                   {majorAspects.length}
                 </span>
               </button>
@@ -610,15 +611,15 @@ export const DashboardRingkasanView: React.FC<DashboardRingkasanViewProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveMiniTab('manzil')}
-                className={`px-3 py-1.5 rounded-lg font-serif font-semibold transition-all flex items-center gap-1.5 ${
+                className={`min-h-[40px] sm:min-h-0 px-3 py-1.5 rounded-lg font-serif font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                   activeMiniTab === 'manzil'
                     ? 'bg-[#c59a43] text-black shadow-sm'
                     : 'opacity-70 hover:opacity-100'
                 }`}
               >
-                <Moon className="w-3.5 h-3.5" />
+                <Moon className="w-3.5 h-3.5 shrink-0" />
                 <span>Manzil Bulan Saat Ini</span>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-sky-500/20 text-sky-300 font-mono">
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-sky-500/20 text-sky-300 font-mono tabular-nums">
                   #{activeManzil.mansionNumber}
                 </span>
               </button>
@@ -626,13 +627,13 @@ export const DashboardRingkasanView: React.FC<DashboardRingkasanViewProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveMiniTab('device')}
-                className={`px-3 py-1.5 rounded-lg font-serif font-semibold transition-all flex items-center gap-1.5 ${
+                className={`min-h-[40px] sm:min-h-0 px-3 py-1.5 rounded-lg font-serif font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                   activeMiniTab === 'device'
                     ? 'bg-[#c59a43] text-black shadow-sm'
                     : 'opacity-70 hover:opacity-100'
                 }`}
               >
-                <Smartphone className="w-3.5 h-3.5" />
+                <Smartphone className="w-3.5 h-3.5 shrink-0" />
                 <span>Akses Android / iOS &amp; Offline</span>
                 {deviceInfo.isMobile && (
                   <span className="w-2 h-2 rounded-full bg-emerald-400" />

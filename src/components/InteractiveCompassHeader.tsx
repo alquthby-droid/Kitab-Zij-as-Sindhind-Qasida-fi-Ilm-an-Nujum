@@ -280,12 +280,13 @@ export const InteractiveCompassHeader: React.FC<InteractiveCompassHeaderProps> =
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className={`group relative inline-flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl border font-serif text-xs transition-all shadow-sm ${
+        className={`group relative inline-flex items-center gap-1.5 sm:gap-2 min-h-[44px] sm:min-h-0 px-2 sm:px-3 py-1.5 rounded-xl border font-serif text-xs transition-all shadow-sm shrink-0 ${
           isNight
             ? 'bg-[#151c2e] hover:bg-[#1e2a44] border-[#293b5d] text-[#e6ded0]'
             : 'bg-[#ede5d5] hover:bg-[#e2d6bf] border-[#dacdb2] text-[#3d3326]'
         }`}
         title="Buka Kompas Interaktif Falak & Orientasi Langit (Zij as-Sindhind)"
+        aria-label="Kompas Falak"
       >
         {/* Animated Astrolabe Compass Dial Icon */}
         <div className="relative w-6 h-6 flex items-center justify-center shrink-0">
@@ -307,7 +308,7 @@ export const InteractiveCompassHeader: React.FC<InteractiveCompassHeaderProps> =
             <line x1="30" y1="18" x2="33" y2="18" stroke="#c59a43" strokeWidth="1" strokeOpacity="0.6" />
 
             {/* Rotating True North Needle (Rotates counter to heading to point to North) */}
-            <g transform={`rotate(${-currentDisplayHeading}, 180, 180)`}>
+            <g transform={`rotate(${-currentDisplayHeading}, 18, 18)`}>
               {/* North Pointer (Gold/Ruby) */}
               <polygon
                 points="18,5 15.5,18 20.5,18"
@@ -354,41 +355,46 @@ export const InteractiveCompassHeader: React.FC<InteractiveCompassHeaderProps> =
 
       {/* EXPANDED INTERACTIVE COMPASS MODAL / HUD */}
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm overflow-y-auto">
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm overflow-y-auto"
+          onClick={() => setIsOpen(false)}
+        >
           <div
-            className={`relative w-full max-w-2xl rounded-2xl border shadow-2xl overflow-hidden transition-all my-auto ${
+            onClick={(e) => e.stopPropagation()}
+            className={`relative w-full sm:max-w-2xl rounded-t-3xl sm:rounded-2xl border shadow-2xl overflow-hidden transition-all pb-safe ${
               isNight ? 'bg-[#0f1523] border-[#293b5d] text-[#e6ded0]' : 'bg-[#f7f2e7] border-[#d8caba] text-[#2c2419]'
             }`}
           >
             {/* Modal Header */}
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-current/10 bg-current/5">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-[#c59a43]/20 border border-[#c59a43]/40 flex items-center justify-center text-[#c59a43]">
+            <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 border-b border-current/10 bg-current/5">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-[#c59a43]/20 border border-[#c59a43]/40 flex items-center justify-center text-[#c59a43] shrink-0">
                   <Compass className="w-4 h-4 animate-spin-slow" />
                 </div>
-                <div>
-                  <h3 className="font-serif font-bold text-sm sm:text-base text-[#c59a43] flex items-center gap-2">
-                    <span>Kompas Falak & Orientasi Langit</span>
-                    <span className="text-xs font-normal opacity-75 hidden sm:inline">
+                <div className="min-w-0">
+                  <h3 className="font-serif font-bold text-sm sm:text-base text-[#c59a43] flex items-center gap-2 truncate">
+                    <span className="truncate">Kompas Falak &amp; Orientasi Langit</span>
+                    <span className="text-xs font-normal opacity-75 hidden sm:inline font-arabic">
                       (بَيْتُ الإِبْرَةِ وَسَمْتُ الشَّمَالِ)
                     </span>
                   </h3>
-                  <p className="text-[11px] opacity-70">
-                    Arah Utara Sejati & Acuan Azimuth Pengamatan untuk Modul Peta Langit
+                  <p className="text-[11px] opacity-70 truncate">
+                    Arah Utara Sejati &amp; Acuan Azimuth Pengamatan untuk Peta Langit
                   </p>
                 </div>
               </div>
 
               <button
                 onClick={() => setIsOpen(false)}
-                className="p-1.5 rounded-lg hover:bg-current/10 transition-colors text-current/70 hover:text-current"
+                className="min-h-[44px] min-w-[44px] rounded-xl flex items-center justify-center hover:bg-current/10 transition-colors text-current/70 hover:text-current shrink-0"
+                aria-label="Tutup modal kompas"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Modal Content */}
-            <div className="p-4 sm:p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+            <div className="p-4 sm:p-6 space-y-6 max-h-[82dvh] overflow-y-auto">
               {/* Main Visual Dial & Heading Display */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
                 {/* SVG Astrolabe Compass Dial */}

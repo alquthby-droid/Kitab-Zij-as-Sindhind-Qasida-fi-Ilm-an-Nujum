@@ -391,16 +391,16 @@ export const ManzilGlobe3DView: React.FC<ManzilGlobe3DViewProps> = ({
         </div>
 
         {/* Coordinate Framework Switcher */}
-        <div className="flex flex-wrap items-center gap-2 self-start lg:self-auto shrink-0">
+        <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto min-w-0">
           <div
-            className={`p-1 rounded-xl border flex items-center gap-1 ${
+            className={`p-1 rounded-xl border flex items-center gap-1 overflow-x-auto no-scrollbar max-w-full ${
               isNight ? 'bg-[#0f172a] border-[#223354]' : 'bg-[#ede5d4] border-[#d8ccb8]'
             }`}
           >
             <button
               id="coord-sys-horizontal"
               onClick={() => setCoordSystem('horizontal')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-serif font-bold transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-2 sm:py-1.5 rounded-lg text-xs font-serif font-bold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 min-h-[40px] sm:min-h-0 ${
                 coordSystem === 'horizontal'
                   ? 'bg-[#c59a43] text-black shadow'
                   : isNight
@@ -409,13 +409,13 @@ export const ManzilGlobe3DView: React.FC<ManzilGlobe3DViewProps> = ({
               }`}
               title="Koordinat Alt-Azimuth berbasis Ufuk & Zenit Pengamat"
             >
-              <Compass className="w-3.5 h-3.5" />
+              <Compass className="w-3.5 h-3.5 shrink-0" />
               <span>Horisontal Lokal</span>
             </button>
             <button
               id="coord-sys-equatorial"
               onClick={() => setCoordSystem('equatorial')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-serif font-bold transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-2 sm:py-1.5 rounded-lg text-xs font-serif font-bold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 min-h-[40px] sm:min-h-0 ${
                 coordSystem === 'equatorial'
                   ? 'bg-[#c59a43] text-black shadow'
                   : isNight
@@ -424,13 +424,13 @@ export const ManzilGlobe3DView: React.FC<ManzilGlobe3DViewProps> = ({
               }`}
               title="Koordinat Ekuatorial (RA & Dec) berbasis Khatulistiwa Langit & Poros Kutub"
             >
-              <Globe className="w-3.5 h-3.5" />
+              <Globe className="w-3.5 h-3.5 shrink-0" />
               <span>Ekuatorial Falak</span>
             </button>
             <button
               id="coord-sys-ecliptic"
               onClick={() => setCoordSystem('ecliptic')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-serif font-bold transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-2 sm:py-1.5 rounded-lg text-xs font-serif font-bold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 min-h-[40px] sm:min-h-0 ${
                 coordSystem === 'ecliptic'
                   ? 'bg-[#c59a43] text-black shadow'
                   : isNight
@@ -439,7 +439,7 @@ export const ManzilGlobe3DView: React.FC<ManzilGlobe3DViewProps> = ({
               }`}
               title="Koordinat Ekliptika (Longitude & Latitude) mengelilingi sabuk 28 Manzil"
             >
-              <Sparkles className="w-3.5 h-3.5" />
+              <Sparkles className="w-3.5 h-3.5 shrink-0" />
               <span>Ekliptika Zodiak</span>
             </button>
           </div>

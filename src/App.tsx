@@ -17,8 +17,13 @@ import {
   saveScheduledRituals,
   getRitualReminderTargetMs,
   playRitualChime,
+  transliterateToArabic,
   ScheduledRitual,
 } from './lib/manzilRitualEngine';
+import {
+  syncRitualsToServiceWorker,
+  triggerServiceWorkerNotification,
+} from './lib/pushNotificationManager';
 import {
   getSavedArabicFontId,
   applyGlobalArabicFont,
@@ -40,6 +45,8 @@ import { SeasonalWeatherForecastView } from './components/SeasonalWeatherForecas
 import { SecondaryProgressionsView } from './components/SecondaryProgressionsView';
 import { HisabJumalPasaranView } from './components/HisabJumalPasaranView';
 import { AmuletWafaqGeneratorView } from './components/AmuletWafaqGeneratorView';
+import { IatroastrologyView } from './components/IatroastrologyView';
+import { PlanetaryHistoricalAnalysisView } from './components/PlanetaryHistoricalAnalysisView';
 import { StarMapView } from './components/StarMapView';
 import { ManzilCalculatorView } from './components/ManzilCalculatorView';
 import { ManzilRitualSchedulerView } from './components/ManzilRitualSchedulerView';
@@ -81,6 +88,8 @@ import {
   Hash,
   Shield,
   Milestone,
+  Stethoscope,
+  LineChart,
 } from 'lucide-react';
 
 export function App() {
@@ -100,6 +109,8 @@ export function App() {
     | 'weather'
     | 'jumal'
     | 'wafaq'
+    | 'iatroastrology'
+    | 'planetary_analysis'
     | 'ephemeris'
     | 'calendar'
     | 'manuscripts'
@@ -107,7 +118,13 @@ export function App() {
     | 'annotations'
     | 'interpretation';
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>('astrolabe');
+  const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
+    if (typeof window !== 'undefined') {
+      const tabParam = new URLSearchParams(window.location.search).get('tab');
+      if (tabParam === 'ritual') return 'ritual';
+    }
+    return 'astrolabe';
+  });
   const [astrolabeViewMode, setAstrolabeViewMode] = useState<'both' | 'sphere' | 'power_chart'>('both');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
 
@@ -178,6 +195,7 @@ export function App() {
     const checkDueRituals = () => {
       const items = loadScheduledRituals();
       setScheduledRitualCount(items.filter((r) => r.enabled).length);
+      void syncRitualsToServiceWorker(items);
       const now = Date.now();
       let updated = false;
 
@@ -193,18 +211,23 @@ export function App() {
           playRitualChime();
           setActiveRitualAlert(r);
 
+          const arabMelayu =
+            r.manzilArabMelayu || transliterateToArabic(r.manzilTransliteration, r.manzilNumber);
+
           if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-            try {
-              new Notification(
-                `Terbit Manzil #${r.manzilNumber} (${r.manzilTransliteration})`,
-                {
-                  body: `${r.title} • Jam terbit ${r.risingTime}–${r.windowEnd} • Planet: ${r.planetaryHour}`,
-                  tag: notifKey,
-                }
-              );
-            } catch {
-              // Some mobile browsers require ServiceWorkerRegistration.showNotification
-            }
+            void triggerServiceWorkerNotification({
+              id: r.id,
+              title: `Terbit Manzil #${r.manzilNumber} (${r.manzilTransliteration})`,
+              body: `${r.title} • ${arabMelayu} • Jam terbit ${r.risingTime}–${r.windowEnd} • Planet: ${r.planetaryHour}`,
+              manzilNumber: r.manzilNumber,
+              manzilTransliteration: r.manzilTransliteration,
+              manzilArabMelayu: arabMelayu,
+              risingTime: `${r.risingTime}–${r.windowEnd}`,
+              planetaryHour: r.planetaryHour,
+              ritualTitle: r.title,
+              tag: notifKey,
+              url: '/?tab=ritual',
+            });
           }
 
           return { ...r, lastNotifiedKey: notifKey };
@@ -219,7 +242,22 @@ export function App() {
 
     checkDueRituals();
     const timer = window.setInterval(checkDueRituals, 15000);
-    return () => window.clearInterval(timer);
+
+    const handleSwMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'NAVIGATE_RITUAL') {
+        setActiveTab('ritual');
+      }
+    };
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleSwMessage);
+    }
+
+    return () => {
+      window.clearInterval(timer);
+      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleSwMessage);
+      }
+    };
   }, []);
 
   // Synchronized Historical Date State
@@ -374,6 +412,8 @@ export function App() {
     { id: 'weather', label: 'الأنواء والطقس', sub: 'Cuaca Musiman', icon: CloudRain },
     { id: 'jumal', label: 'حساب الجمل والفال', sub: 'Hisab Jumal & Pasaran', icon: Hash },
     { id: 'wafaq', label: 'طِلَسْم وَأَوْفَاق', sub: 'Amulet & Wafaq', icon: Shield },
+    { id: 'iatroastrology', label: 'الطب النجومي', sub: 'Iatroastrology', icon: Stethoscope },
+    { id: 'planetary_analysis', label: 'تحليل الكواكب', sub: 'Data Analisis Planet', icon: LineChart },
     { id: 'ephemeris', label: 'جدول الكواكب', sub: 'Ephemeris', icon: Sparkles },
     { id: 'calendar', label: 'تحويل التواريخ', sub: 'Tarikh & Kalender', icon: Calendar },
     { id: 'interpretation', label: 'أحكام النجوم', sub: 'Tafsir Astrologi', icon: Info },
@@ -397,7 +437,7 @@ export function App() {
 
   return (
     <div
-      className={`min-h-screen font-sans transition-colors duration-200 flex flex-col ${
+      className={`min-h-dvh font-sans transition-colors duration-200 flex flex-col overflow-x-clip ${
         isNight
           ? 'bg-[#0a0d14] text-[#e2d8c3]'
           : 'bg-[#f4efe4] text-[#2c2419]'
@@ -405,13 +445,13 @@ export function App() {
     >
       {/* Top Header / Astrological Banner */}
       <header
-        className={`sticky top-0 z-40 border-b backdrop-blur-md transition-colors pt-safe ${
+        className={`sticky top-0 z-40 border-b backdrop-blur-md transition-colors pt-safe px-safe ${
           isNight
             ? 'bg-[#0f1422]/90 border-[#1f2a3f]'
             : 'bg-[#faf6ee]/90 border-[#dfd5be]'
         }`}
       >
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2 sm:py-3">
           <div className="flex items-center justify-between gap-2 sm:gap-4">
             {/* Title & Arabic Classical Inscription */}
             <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
@@ -473,10 +513,10 @@ export function App() {
                 isLiveSyncedToStarMap={isCompassSynced}
               />
 
-              {/* User Guide Button */}
+              {/* User Guide Button (Desktop/Tablet header; mobile uses Drawer Quick Actions) */}
               <button
                 onClick={() => setIsUserGuideOpen(true)}
-                className={`inline-flex items-center justify-center gap-1.5 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors shadow-sm ${
+                className={`hidden sm:inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors shadow-sm ${
                   isNight
                     ? 'bg-[#151c2e] hover:bg-[#202c46] border-[#25344f] text-[#c59a43]'
                     : 'bg-[#ede5d5] hover:bg-[#e4dac6] border-[#dacdb2] text-[#825c1d]'
@@ -484,17 +524,17 @@ export function App() {
                 title="Buka Panduan Pengguna & Glosarium Falak"
                 aria-label="Panduan Pengguna"
               >
-                <HelpCircle className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-                <span className="hidden sm:inline">Panduan Pengguna</span>
+                <HelpCircle className="w-3.5 h-3.5" />
+                <span>Panduan Pengguna</span>
               </button>
 
               {/* Install PWA Button (Android / iOS / Desktop) */}
               <PWAInstallButton theme={theme} compact />
 
-              {/* Share / Publish s.id & Arabic Font Button */}
+              {/* Share / Publish s.id & Arabic Font Button (Desktop/Tablet header; mobile uses Drawer) */}
               <button
                 onClick={() => setIsShareModalOpen(true)}
-                className={`inline-flex items-center justify-center gap-1.5 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors shadow-sm ${
+                className={`hidden sm:inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors shadow-sm ${
                   isNight
                     ? 'bg-[#151c2e] hover:bg-[#202c46] border-emerald-500/35 text-emerald-300'
                     : 'bg-[#ede5d5] hover:bg-[#e4dac6] border-emerald-600/35 text-emerald-800'
@@ -502,19 +542,19 @@ export function App() {
                 title="Publikasi s.id, Bagikan Tautan & Pilih Font Arab"
                 aria-label="Publikasi s.id dan Font Arab"
               >
-                <Share2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                <Share2 className="w-3.5 h-3.5" />
                 <span className="hidden xl:inline">s.id / Font</span>
               </button>
 
-              {/* PDF Export Button */}
+              {/* PDF Export Button (Desktop/Tablet header; mobile uses Drawer) */}
               <button
                 onClick={() => setIsPdfModalOpen(true)}
-                className="inline-flex items-center justify-center gap-1.5 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#c59a43] text-black hover:bg-[#d4a84e] transition-colors shadow-sm"
+                className="hidden sm:inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#c59a43] text-black hover:bg-[#d4a84e] transition-colors shadow-sm"
                 title="Ekspor PDF"
                 aria-label="Ekspor PDF"
               >
-                <FileDown className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-                <span className="hidden sm:inline">Ekspor PDF</span>
+                <FileDown className="w-3.5 h-3.5" />
+                <span>Ekspor PDF</span>
               </button>
 
               {/* Night Mode Toggle */}
@@ -585,8 +625,17 @@ export function App() {
                 <BellRing className="w-5 h-5" />
               </div>
               <div>
-                <div className="font-serif font-bold text-sm">
-                  Pengingat Waktu Terbit Manzil #{activeRitualAlert.manzilNumber} ({activeRitualAlert.manzilTransliteration})
+                <div className="font-serif font-bold text-sm flex flex-wrap items-center gap-2">
+                  <span>
+                    Pengingat Waktu Terbit Manzil #{activeRitualAlert.manzilNumber} ({activeRitualAlert.manzilTransliteration})
+                  </span>
+                  <span className="font-arabic text-base font-normal text-amber-500 dark:text-amber-300" dir="rtl">
+                    {activeRitualAlert.manzilArabMelayu ||
+                      transliterateToArabic(
+                        activeRitualAlert.manzilTransliteration,
+                        activeRitualAlert.manzilNumber
+                      )}
+                  </span>
                 </div>
                 <p className="text-xs opacity-90 mt-0.5">
                   Amalan: <span className="font-semibold">{activeRitualAlert.title}</span> • Jendela terbit{' '}
@@ -644,6 +693,7 @@ export function App() {
           onToggleCompassSync={(synced) => setIsCompassSynced(synced)}
         />
 
+        <div key={activeTab} className="tab-panel-fade-in">
         {activeTab === 'astrolabe' && (
           <div className="space-y-6">
             {/* View Mode Selector in Astrolabe Area */}
@@ -930,6 +980,30 @@ export function App() {
           />
         )}
 
+        {activeTab === 'iatroastrology' && (
+          <IatroastrologyView
+            positions={chartData.positions}
+            aspects={chartData.aspects}
+            currentDateInfo={historicalDate}
+            theme={theme}
+            onAnnotate={(title, content) =>
+              handleOpenAnnotation('horoscope', 'iatroastrology', `${title} - ${content}`)
+            }
+          />
+        )}
+
+        {activeTab === 'planetary_analysis' && (
+          <PlanetaryHistoricalAnalysisView
+            currentDateInfo={historicalDate}
+            observerLocation={observerLocation}
+            theme={theme}
+            onApplyDate={applyNewDate}
+            onAnnotate={(title, content) =>
+              handleOpenAnnotation('planet', 'planetary_analysis', `${title}\n\n${content}`)
+            }
+          />
+        )}
+
         {activeTab === 'ephemeris' && (
           <EphemerisTable
             positions={chartData.positions}
@@ -994,6 +1068,7 @@ export function App() {
             initialTarget={annotationTarget}
           />
         )}
+        </div>
       </main>
 
       {/* Global Application Footer */}
@@ -1108,10 +1183,11 @@ export function App() {
                 : 'bg-[#faf6ee] border-[#dacdb2] text-[#2c2419]'
             }`}
           >
-            <div className="flex items-center justify-between px-4 py-3.5 border-b border-current/10">
+            <div className="w-10 h-1.5 bg-current/20 rounded-full mx-auto mt-2.5 mb-1 shrink-0" />
+            <div className="flex items-center justify-between px-4 py-3 border-b border-current/10">
               <div>
                 <h2 className="font-serif font-bold text-sm text-[#c59a43]">
-                  Daftar Modul Zij as-Sindhind (20 Modul)
+                  Menu &amp; Modul Zij as-Sindhind
                 </h2>
                 <p className="text-[11px] opacity-75 font-mono">
                   {historicalDate.hijri.day} {historicalDate.hijri.monthNameLatin} {historicalDate.hijri.year} H · {observerLocation.name}
@@ -1124,6 +1200,53 @@ export function App() {
                 aria-label="Tutup daftar modul"
               >
                 <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Mobile Quick Utility Actions (Panduan, s.id/Font, Ekspor PDF) */}
+            <div className="px-3 pt-3 pb-1 grid grid-cols-3 gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  setIsUserGuideOpen(true);
+                }}
+                className={`min-h-[48px] px-2 py-2 rounded-xl border text-[11px] font-semibold flex flex-col items-center justify-center gap-1 active:scale-95 transition-transform ${
+                  isNight
+                    ? 'bg-[#151e32] border-[#25344f] text-[#c59a43]'
+                    : 'bg-[#f1e9d9] border-[#dacdb2] text-[#825c1d]'
+                }`}
+              >
+                <HelpCircle className="w-4 h-4" />
+                <span>Panduan</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  setIsShareModalOpen(true);
+                }}
+                className={`min-h-[48px] px-2 py-2 rounded-xl border text-[11px] font-semibold flex flex-col items-center justify-center gap-1 active:scale-95 transition-transform ${
+                  isNight
+                    ? 'bg-[#151e32] border-emerald-500/35 text-emerald-300'
+                    : 'bg-[#f1e9d9] border-emerald-600/35 text-emerald-800'
+                }`}
+              >
+                <Share2 className="w-4 h-4" />
+                <span>s.id / Font</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  setIsPdfModalOpen(true);
+                }}
+                className="min-h-[48px] px-2 py-2 rounded-xl bg-[#c59a43] text-black text-[11px] font-bold flex flex-col items-center justify-center gap-1 shadow-sm active:scale-95 transition-transform"
+              >
+                <FileDown className="w-4 h-4" />
+                <span>Ekspor PDF</span>
               </button>
             </div>
 

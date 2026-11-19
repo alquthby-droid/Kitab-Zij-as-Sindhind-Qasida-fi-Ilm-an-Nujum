@@ -839,7 +839,7 @@ Artinya: ${d.mansion.classicalVerseTranslation}`;
               </span>
             </div>
 
-            <div className="grid grid-cols-10 sm:grid-cols-15 md:grid-cols-30 gap-1 overflow-x-auto pb-1">
+            <div className="grid grid-cols-5 sm:grid-cols-10 md:grid-cols-15 xl:grid-cols-30 gap-1.5 sm:gap-1 pb-1">
               {historyData.days.map((d, idx) => {
                 const isSelected = idx === selectedDayIndex;
                 const elem = getElementBadge(d.mansion.element);
@@ -850,7 +850,7 @@ Artinya: ${d.mansion.classicalVerseTranslation}`;
                     key={idx}
                     onClick={() => setSelectedDayIndex(idx)}
                     title={`${d.gregorian.shortDate} - Manzil #${d.mansion.number} ${d.mansion.transliteration} (${d.mansion.fortune})`}
-                    className={`p-1 rounded-md text-center border transition-all flex flex-col items-center justify-center min-w-[28px] ${
+                    className={`min-h-[44px] sm:min-h-0 p-1 rounded-md text-center border transition-all flex flex-col items-center justify-center ${
                       isSelected
                         ? 'bg-[#c59a43] border-[#d4af37] text-black shadow-md scale-105 z-10'
                         : isNight

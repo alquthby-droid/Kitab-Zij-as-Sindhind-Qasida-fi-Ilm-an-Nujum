@@ -1134,7 +1134,7 @@ Berdasarkan kaidah Syams al-Ma'arif al-Kubra (Al-Buni) & Kitab al-Awfaq (Al-Ghaz
           </p>
         </div>
 
-        <div className="w-[500px] h-[520px] mx-auto mb-6">
+        <div className="w-full max-w-[500px] aspect-[500/520] mx-auto mb-6">
           <AmuletCanvasRenderer
             amuletData={amuletData}
             canvasRef={canvasRef}

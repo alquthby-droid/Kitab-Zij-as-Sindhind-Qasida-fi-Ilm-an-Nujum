@@ -8,13 +8,27 @@
 @layer base {
   html {
     -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
     scroll-behavior: smooth;
+    overflow-x: clip;
+    max-width: 100%;
   }
 
   body {
     overscroll-behavior-y: contain;
     touch-action: manipulation;
+    overflow-x: clip;
+    max-width: 100%;
     font-family: "Plus Jakarta Sans", var(--font-arabic), ui-sans-serif, system-ui, sans-serif;
+  }
+
+  /* Prevent iOS Safari automatic viewport zoom when focusing inputs/selects */
+  @media (max-width: 767px) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+    select,
+    textarea {
+      font-size: 16px;
+    }
   }
 }
 
@@ -52,6 +66,7 @@
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 .pb-safe {
@@ -61,3 +76,32 @@
 .pt-safe {
   padding-top: env(safe-area-inset-top);
 }
+
+.px-safe {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+@keyframes tabPanelFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tab-panel-fade-in {
+  animation: tabPanelFadeIn 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: opacity, transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-panel-fade-in {
+    animation: none;
+    will-change: auto;
+  }
+}
+

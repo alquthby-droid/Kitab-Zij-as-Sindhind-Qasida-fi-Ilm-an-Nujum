@@ -18,6 +18,11 @@ import {
   Volume2,
   ArrowUpDown,
   Moon,
+  Radio,
+  Copy,
+  Smartphone,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import {
   RITUAL_CATEGORIES,
@@ -30,7 +35,16 @@ import {
   getRitualReminderTargetMs,
   playRitualChime,
   exportRitualsToIcs,
+  transliterateToArabic,
 } from '../lib/manzilRitualEngine';
+import {
+  PushCapabilityReport,
+  getPushCapabilityReport,
+  subscribeToManzilPush,
+  unsubscribeFromManzilPush,
+  syncRitualsToServiceWorker,
+  triggerServiceWorkerNotification,
+} from '../lib/pushNotificationManager';
 import { HistoricalDateInfo } from '../types';
 
 interface ManzilRitualSchedulerViewProps {
@@ -89,17 +103,34 @@ export const ManzilRitualSchedulerView: React.FC<ManzilRitualSchedulerViewProps>
   const [draftReminderMin, setDraftReminderMin] = useState<number>(10);
   const [draftNotes, setDraftNotes] = useState<string>('');
 
-  // Notification permission & live clock for countdowns
+  // Notification permission, PushManager status & live clock for countdowns
   const [notifPermission, setNotifPermission] = useState<NotificationPermission | 'unsupported'>(() => {
     if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported';
     return Notification.permission;
   });
+  const [pushReport, setPushReport] = useState<PushCapabilityReport | null>(null);
+  const [isPushPanelOpen, setIsPushPanelOpen] = useState<boolean>(false);
+  const [customVapidKey, setCustomVapidKey] = useState<string>('');
+  const [isPushBusy, setIsPushBusy] = useState<boolean>(false);
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const id = setInterval(() => setNowMs(Date.now()), 15000);
     return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    getPushCapabilityReport().then((report) => {
+      if (!active) return;
+      setPushReport(report);
+      setNotifPermission(report.permission);
+    });
+    syncRitualsToServiceWorker(rituals);
+    return () => {
+      active = false;
+    };
   }, []);
 
   const showToast = (msg: string) => {
@@ -143,40 +174,78 @@ export const ManzilRitualSchedulerView: React.FC<ManzilRitualSchedulerViewProps>
   const persistRituals = (next: ScheduledRitual[]) => {
     setRituals(next);
     saveScheduledRituals(next);
+    syncRitualsToServiceWorker(next);
     if (onSchedulesChanged) onSchedulesChanged();
   };
 
-  // Request Browser Notification permission
+  // Request Browser Notification permission & subscribe via PushManager
   const handleRequestNotifications = async () => {
-    if (typeof window === 'undefined' || !('Notification' in window)) {
-      showToast('Browser perangkat ini belum mendukung Notifikasi Web; gunakan ekspor kalender (.ics).');
-      return;
-    }
+    setIsPushBusy(true);
     try {
-      const result = await Notification.requestPermission();
-      setNotifPermission(result);
-      if (result === 'granted') {
+      const res = await subscribeToManzilPush(customVapidKey || undefined);
+      setPushReport(res.report);
+      setNotifPermission(res.report.permission);
+      if (res.ok) {
         playRitualChime();
-        new Notification('Pengingat Manzil Aktif', {
-          body: 'Anda akan menerima notifikasi otomatis saat waktu terbit Manzil yang dijadwalkan tiba.',
+        await syncRitualsToServiceWorker(rituals);
+        await triggerServiceWorkerNotification({
+          title: 'Pengingat Push Manzil Aktif',
+          body: 'Zij as-Sindhind siap mengirim notifikasi terbit Manzil ke perangkat Anda meski berjalan di latar belakang.',
+          manzilNumber: moonManzilNumber,
+          manzilTransliteration: schedules.find((s) => s.manzil.number === moonManzilNumber)?.manzil.transliteration,
+          tag: 'manzil-push-activated',
         });
-        showToast('Notifikasi pengingat berhasil diaktifkan!');
-      } else {
-        showToast('Izin notifikasi ditolak. Anda tetap bisa memakai pengingat suara dalam aplikasi atau ekspor .ics.');
       }
+      showToast(res.message);
     } catch {
-      showToast('Gagal meminta izin notifikasi.');
+      showToast('Gagal mengaktifkan izin notifikasi & PushManager.');
+    } finally {
+      setIsPushBusy(false);
     }
   };
 
-  const handleTestReminder = () => {
-    playRitualChime();
-    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-      new Notification('Uji Pengingat Terbit Manzil', {
-        body: `Simulasi pengingat untuk lokasi ${observerLocation.name}.`,
-      });
+  const handleUnsubscribePush = async () => {
+    setIsPushBusy(true);
+    try {
+      const report = await unsubscribeFromManzilPush();
+      setPushReport(report);
+      showToast('Langganan PushManager latar belakang dinonaktifkan.');
+    } finally {
+      setIsPushBusy(false);
     }
-    showToast('Uji nada & notifikasi pengingat dijalankan.');
+  };
+
+  const handleCopySubscriptionJson = async () => {
+    if (!pushReport?.subscriptionJson) return;
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(pushReport.subscriptionJson, null, 2));
+      showToast('Payload PushSubscription JSON berhasil disalin.');
+    } catch {
+      showToast('Tidak dapat menyalin ke clipboard.');
+    }
+  };
+
+  const handleTestReminder = async () => {
+    playRitualChime();
+    const moonSchedule = schedules.find((s) => s.manzil.number === moonManzilNumber) || schedules[0];
+    const arabMelayu = moonSchedule
+      ? transliterateToArabic(moonSchedule.manzil.transliteration, moonSchedule.manzil.number)
+      : '';
+    const sent = await triggerServiceWorkerNotification({
+      title: 'Uji Push Terbit Manzil — Zij as-Sindhind',
+      body: `Simulasi pengingat di ${observerLocation.name}: ${moonSchedule?.manzil.transliteration || 'Manzil'} (${arabMelayu}) · Terbit ${moonSchedule?.risingTimeFormatted || ''}`,
+      manzilNumber: moonSchedule?.manzil.number,
+      manzilTransliteration: moonSchedule?.manzil.transliteration,
+      manzilArabMelayu: arabMelayu,
+      risingTime: moonSchedule ? `${moonSchedule.risingTimeFormatted}–${moonSchedule.windowEndFormatted}` : undefined,
+      planetaryHour: moonSchedule?.planetaryHourAtRising,
+      tag: 'manzil-push-test',
+    });
+    showToast(
+      sent
+        ? 'Uji nada & notifikasi Push Service Worker dijalankan.'
+        : 'Nada pengingat diputar (aktifkan izin notifikasi untuk banner OS).'
+    );
   };
 
   // Open draft scheduler for a specific Manzil
@@ -197,12 +266,21 @@ export const ManzilRitualSchedulerView: React.FC<ManzilRitualSchedulerViewProps>
     e.preventDefault();
     if (!draftTarget) return;
 
+    const finalTitle = draftTitle.trim() || `Amalan Terbit ${draftTarget.manzil.transliteration}`;
+    const manzilArabMelayu = transliterateToArabic(
+      draftTarget.manzil.transliteration,
+      draftTarget.manzil.number
+    );
+    const titleArabic = transliterateToArabic(finalTitle);
+
     const newItem: ScheduledRitual = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      title: draftTitle.trim() || `Amalan Terbit ${draftTarget.manzil.transliteration}`,
+      title: finalTitle,
+      titleArabic,
       category: selectedCategory,
       manzilNumber: draftTarget.manzil.number,
       manzilArabic: draftTarget.manzil.arabicName,
+      manzilArabMelayu,
       manzilTransliteration: draftTarget.manzil.transliteration,
       dateISO,
       risingTime: draftTarget.risingTimeFormatted,
@@ -218,7 +296,7 @@ export const ManzilRitualSchedulerView: React.FC<ManzilRitualSchedulerViewProps>
     const next = [newItem, ...rituals];
     persistRituals(next);
     setDraftTarget(null);
-    showToast(`Jadwal & pengingat "${newItem.title}" tersimpan (${newItem.risingTime}).`);
+    showToast(`Jadwal & pengingat "${newItem.title}" (${manzilArabMelayu}) tersimpan.`);
   };
 
   const handleToggleRitual = (id: string) => {
@@ -296,18 +374,21 @@ export const ManzilRitualSchedulerView: React.FC<ManzilRitualSchedulerViewProps>
             </p>
           </div>
 
-          {/* Notification & Calendar Controls */}
+          {/* Notification, PushManager & Calendar Controls */}
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <button
               type="button"
+              disabled={isPushBusy}
               onClick={handleRequestNotifications}
-              className={`min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer whitespace-nowrap ${
-                notifPermission === 'granted'
+              className={`min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer whitespace-nowrap disabled:opacity-60 ${
+                pushReport?.isSubscribed
+                  ? 'bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40'
+                  : notifPermission === 'granted'
                   ? 'bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40'
                   : 'bg-amber-600 hover:bg-amber-700 text-white shadow-sm'
               }`}
             >
-              {notifPermission === 'granted' ? (
+              {pushReport?.isSubscribed || notifPermission === 'granted' ? (
                 <BellRing className="w-4 h-4" />
               ) : notifPermission === 'denied' ? (
                 <BellOff className="w-4 h-4" />
@@ -315,22 +396,35 @@ export const ManzilRitualSchedulerView: React.FC<ManzilRitualSchedulerViewProps>
                 <Bell className="w-4 h-4" />
               )}
               <span>
-                {notifPermission === 'granted'
-                  ? 'Notifikasi Aktif'
+                {pushReport?.isSubscribed
+                  ? 'Push Native Aktif'
+                  : notifPermission === 'granted'
+                  ? 'Aktifkan PushManager'
                   : notifPermission === 'denied'
                   ? 'Izin Diblokir Browser'
-                  : 'Aktifkan Pengingat'}
+                  : 'Aktifkan Push Latar'}
               </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsPushPanelOpen((prev) => !prev)}
+              className={`min-h-[44px] px-3 py-2 rounded-xl border text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap ${subSurface} hover:border-amber-500`}
+              title="Konfigurasi PushManager & ServiceWorker Android/iOS"
+            >
+              <Radio className={`w-4 h-4 ${pushReport?.isSubscribed ? 'text-emerald-500' : 'text-amber-500'}`} />
+              <span>Push SW</span>
+              {isPushPanelOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             </button>
 
             <button
               type="button"
               onClick={handleTestReminder}
               className={`min-h-[44px] px-3 py-2 rounded-xl border text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap ${subSurface} hover:border-amber-500`}
-              title="Uji nada & notifikasi pengingat"
+              title="Uji nada & notifikasi Push ServiceWorker"
             >
               <Volume2 className="w-4 h-4 text-amber-500" />
-              <span>Uji Nada</span>
+              <span>Uji Push</span>
             </button>
 
             <button
@@ -344,6 +438,97 @@ export const ManzilRitualSchedulerView: React.FC<ManzilRitualSchedulerViewProps>
             </button>
           </div>
         </div>
+
+        {/* Collapsible PushManager & ServiceWorker Status Panel (Android & iOS) */}
+        {isPushPanelOpen && (
+          <div className={`rounded-xl border p-3.5 sm:p-4 space-y-3 text-xs ${subSurface}`}>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-current/10 pb-2">
+              <div className="flex items-center gap-2 font-semibold">
+                <Smartphone className="w-4 h-4 text-amber-500" />
+                <span>Service Worker PushManager (Notifikasi Latar Belakang Android &amp; iOS)</span>
+              </div>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                  pushReport?.isSubscribed
+                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300'
+                    : 'bg-amber-500/15 text-amber-600 dark:text-amber-300'
+                }`}
+              >
+                {pushReport?.isSubscribed ? 'PushSubscription Terhubung' : 'Siap Didaftarkan'}
+              </span>
+            </div>
+
+            {pushReport?.needsIOSHomeScreen && (
+              <div className="p-2.5 rounded-lg border border-amber-500/40 bg-amber-500/10 text-[11px] leading-relaxed">
+                <strong>Catatan iOS Safari:</strong> Untuk mengaktifkan PushManager dan notifikasi native latar belakang di iPhone/iPad (iOS 16.4+), ketuk ikon <strong>Bagikan (Share) → Tambah ke Layar Utama (Add to Home Screen)</strong>, lalu buka aplikasi dari Layar Utama.
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold opacity-80 block">
+                  Kunci Publik VAPID P-256 (Opsional — Otomatis dibuat jika kosong)
+                </label>
+                <input
+                  type="text"
+                  value={customVapidKey}
+                  onChange={(e) => setCustomVapidKey(e.target.value)}
+                  placeholder={pushReport?.vapidPublicKey || 'BP...'}
+                  className={`w-full min-h-[42px] px-3 py-1.5 rounded-lg border text-xs font-mono ${cardSurface}`}
+                />
+              </div>
+
+              <div className="space-y-1 flex flex-col justify-end">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={isPushBusy}
+                    onClick={handleRequestNotifications}
+                    className="min-h-[42px] px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs cursor-pointer disabled:opacity-60"
+                  >
+                    {pushReport?.isSubscribed ? 'Perbarui Langganan Push' : 'Daftarkan PushManager'}
+                  </button>
+
+                  {pushReport?.subscriptionJson && (
+                    <button
+                      type="button"
+                      onClick={handleCopySubscriptionJson}
+                      className="min-h-[42px] px-3 py-1.5 rounded-lg border border-current/20 hover:border-amber-500 text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Salin Endpoint JSON</span>
+                    </button>
+                  )}
+
+                  {pushReport?.isSubscribed && (
+                    <button
+                      type="button"
+                      disabled={isPushBusy}
+                      onClick={handleUnsubscribePush}
+                      className="min-h-[42px] px-3 py-1.5 rounded-lg border border-rose-500/35 text-rose-500 hover:bg-rose-500/10 text-xs font-medium cursor-pointer"
+                    >
+                      Putuskan Push
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] opacity-80 font-mono">
+              <span>SW: {pushReport?.hasServiceWorkerReady ? 'Aktif' : 'Menunggu'}</span>
+              <span>PushManager: {pushReport?.pushManagerSupported ? 'Didukung' : 'Terbatas'}</span>
+              <span>
+                Trigger OS Latar:{' '}
+                {pushReport?.timestampTriggerSupported ? 'TimestampTrigger Native' : 'Background Sync + Push'}
+              </span>
+              {pushReport?.endpoint && (
+                <span className="truncate max-w-xs sm:max-w-md">
+                  Endpoint: {pushReport.endpoint}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Date, Timezone & Location Controls */}
         <div className="pt-3 border-t border-current/10 flex flex-wrap items-end justify-between gap-3">
@@ -457,6 +642,9 @@ export const ManzilRitualSchedulerView: React.FC<ManzilRitualSchedulerViewProps>
               <h3 className="text-base sm:text-lg font-serif font-bold">
                 {draftTarget.manzil.transliteration} ({draftTarget.manzil.arabicName}) · Terbit {draftTarget.risingTimeFormatted}
               </h3>
+              <div className="text-sm font-arabic text-amber-600 dark:text-amber-300 mt-0.5" dir="rtl">
+                {transliterateToArabic(draftTarget.manzil.transliteration, draftTarget.manzil.number)}
+              </div>
             </div>
             <button
               type="button"
@@ -478,6 +666,12 @@ export const ManzilRitualSchedulerView: React.FC<ManzilRitualSchedulerViewProps>
                 className={`w-full min-h-[44px] px-3 py-2 rounded-xl border text-xs sm:text-sm ${subSurface}`}
                 placeholder="Cth: Wirid Ya Fattah & Penulisan Wafaq"
               />
+              {draftTitle.trim() && (
+                <div className="text-xs font-arabic text-amber-600 dark:text-amber-300 pt-0.5 flex items-center justify-between gap-2">
+                  <span className="font-sans text-[10px] opacity-70">Ejaan Arab-Melayu:</span>
+                  <span dir="rtl" className="text-sm">{transliterateToArabic(draftTitle)}</span>
+                </div>
+              )}
             </div>
 
             <div className="space-y-1">
@@ -582,6 +776,9 @@ export const ManzilRitualSchedulerView: React.FC<ManzilRitualSchedulerViewProps>
                           </span>
                         )}
                       </div>
+                      <div className="text-xs font-arabic text-amber-600/90 dark:text-amber-300/90" dir="rtl">
+                        {transliterateToArabic(m.transliteration, m.number)}
+                      </div>
 
                       {/* Rising / Transit / Setting Times */}
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-mono tabular-nums">
@@ -682,8 +879,11 @@ export const ManzilRitualSchedulerView: React.FC<ManzilRitualSchedulerViewProps>
                         <div className="text-xs sm:text-sm font-serif font-bold truncate">
                           {r.title}
                         </div>
+                        <div className="text-xs font-arabic text-amber-600 dark:text-amber-300 mt-0.5 truncate" dir="rtl">
+                          {r.titleArabic || transliterateToArabic(r.title)}
+                        </div>
                         <div className="text-[11px] opacity-80 mt-0.5">
-                          Manzil #{r.manzilNumber} {r.manzilTransliteration} ({r.manzilArabic})
+                          Manzil #{r.manzilNumber} {r.manzilTransliteration} ({r.manzilArabMelayu || transliterateToArabic(r.manzilTransliteration, r.manzilNumber)})
                         </div>
                       </div>
                       <span className="text-[11px] font-mono tabular-nums font-bold text-amber-600 dark:text-amber-400 shrink-0">

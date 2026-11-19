@@ -291,15 +291,15 @@ export const ManzilCalculatorView: React.FC<ManzilCalculatorViewProps> = ({
           </div>
 
           {/* Sub Navigation Tabs & Export Button */}
-          <div className="flex flex-wrap items-center gap-2 self-start md:self-auto shrink-0">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2 w-full md:w-auto min-w-0">
             <div
-              className={`flex items-center p-1 rounded-xl border ${
+              className={`flex items-center p-1 rounded-xl border overflow-x-auto no-scrollbar max-w-full ${
                 isNight ? 'bg-[#0b0f19] border-[#1d273a]' : 'bg-[#e7dfce] border-[#d4c7b0]'
               }`}
             >
               <button
                 onClick={() => setSubView('active_moon')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-serif font-semibold transition-all flex items-center gap-1.5 ${
+                className={`px-3 py-2 sm:py-1.5 rounded-lg text-xs font-serif font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 min-h-[40px] sm:min-h-0 ${
                   subView === 'active_moon'
                     ? 'bg-[#c59a43] text-black shadow'
                     : isNight
@@ -307,13 +307,13 @@ export const ManzilCalculatorView: React.FC<ManzilCalculatorViewProps> = ({
                     : 'text-slate-700 hover:text-slate-900'
                 }`}
               >
-                <Moon className="w-3.5 h-3.5" />
+                <Moon className="w-3.5 h-3.5 shrink-0" />
                 <span>Bulan Saat Ini</span>
               </button>
               <button
                 id="subview-zodiac-circle-tab"
                 onClick={() => setSubView('zodiac_circle')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-serif font-semibold transition-all flex items-center gap-1.5 ${
+                className={`px-3 py-2 sm:py-1.5 rounded-lg text-xs font-serif font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 min-h-[40px] sm:min-h-0 ${
                   subView === 'zodiac_circle'
                     ? 'bg-[#c59a43] text-black shadow'
                     : isNight
@@ -321,13 +321,13 @@ export const ManzilCalculatorView: React.FC<ManzilCalculatorViewProps> = ({
                     : 'text-slate-700 hover:text-slate-900'
                 }`}
               >
-                <Compass className="w-3.5 h-3.5" />
+                <Compass className="w-3.5 h-3.5 shrink-0" />
                 <span>Lingkaran Zodiak 360°</span>
               </button>
               <button
                 id="subview-globe-3d-tab"
                 onClick={() => setSubView('globe_3d')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-serif font-semibold transition-all flex items-center gap-1.5 ${
+                className={`px-3 py-2 sm:py-1.5 rounded-lg text-xs font-serif font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 min-h-[40px] sm:min-h-0 ${
                   subView === 'globe_3d'
                     ? 'bg-[#c59a43] text-black shadow'
                     : isNight
@@ -335,13 +335,13 @@ export const ManzilCalculatorView: React.FC<ManzilCalculatorViewProps> = ({
                     : 'text-slate-700 hover:text-slate-900'
                 }`}
               >
-                <Globe className="w-3.5 h-3.5" />
+                <Globe className="w-3.5 h-3.5 shrink-0" />
                 <span>Bola Langit 3D</span>
               </button>
               <button
                 id="subview-influencer-score-tab"
                 onClick={() => setSubView('influencer_score')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-serif font-semibold transition-all flex items-center gap-1.5 ${
+                className={`px-3 py-2 sm:py-1.5 rounded-lg text-xs font-serif font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 min-h-[40px] sm:min-h-0 ${
                   subView === 'influencer_score'
                     ? 'bg-[#c59a43] text-black shadow'
                     : isNight
@@ -349,13 +349,13 @@ export const ManzilCalculatorView: React.FC<ManzilCalculatorViewProps> = ({
                     : 'text-slate-700 hover:text-slate-900'
                 }`}
               >
-                <Award className="w-3.5 h-3.5" />
+                <Award className="w-3.5 h-3.5 shrink-0" />
                 <span>Influencer Score</span>
               </button>
               <button
                 id="subview-history-tab"
                 onClick={() => setSubView('history')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-serif font-semibold transition-all flex items-center gap-1.5 ${
+                className={`px-3 py-2 sm:py-1.5 rounded-lg text-xs font-serif font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 min-h-[40px] sm:min-h-0 ${
                   subView === 'history'
                     ? 'bg-[#c59a43] text-black shadow'
                     : isNight
@@ -363,12 +363,12 @@ export const ManzilCalculatorView: React.FC<ManzilCalculatorViewProps> = ({
                     : 'text-slate-700 hover:text-slate-900'
                 }`}
               >
-                <TrendingUp className="w-3.5 h-3.5" />
+                <TrendingUp className="w-3.5 h-3.5 shrink-0" />
                 <span>Histori Tren 30 Hari</span>
               </button>
               <button
                 onClick={() => setSubView('catalog')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-serif font-semibold transition-all flex items-center gap-1.5 ${
+                className={`px-3 py-2 sm:py-1.5 rounded-lg text-xs font-serif font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 min-h-[40px] sm:min-h-0 ${
                   subView === 'catalog'
                     ? 'bg-[#c59a43] text-black shadow'
                     : isNight
@@ -376,12 +376,12 @@ export const ManzilCalculatorView: React.FC<ManzilCalculatorViewProps> = ({
                     : 'text-slate-700 hover:text-slate-900'
                 }`}
               >
-                <Layers className="w-3.5 h-3.5" />
+                <Layers className="w-3.5 h-3.5 shrink-0" />
                 <span>Katalog 28 Manzil</span>
               </button>
               <button
                 onClick={() => setSubView('ikhtiyarat')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-serif font-semibold transition-all flex items-center gap-1.5 ${
+                className={`px-3 py-2 sm:py-1.5 rounded-lg text-xs font-serif font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 min-h-[40px] sm:min-h-0 ${
                   subView === 'ikhtiyarat'
                     ? 'bg-[#c59a43] text-black shadow'
                     : isNight
@@ -389,7 +389,7 @@ export const ManzilCalculatorView: React.FC<ManzilCalculatorViewProps> = ({
                     : 'text-slate-700 hover:text-slate-900'
                 }`}
               >
-                <Sparkles className="w-3.5 h-3.5" />
+                <Sparkles className="w-3.5 h-3.5 shrink-0" />
                 <span>Pencari Hari Baik</span>
               </button>
             </div>
@@ -398,7 +398,7 @@ export const ManzilCalculatorView: React.FC<ManzilCalculatorViewProps> = ({
             <button
               id="btn-export-manzil-ical"
               onClick={() => setIsExportModalOpen(true)}
-              className={`px-3.5 py-2 rounded-xl border text-xs font-serif font-bold transition-all flex items-center gap-2 shrink-0 shadow-sm ${
+              className={`min-h-[44px] sm:min-h-0 px-3.5 py-2 rounded-xl border text-xs font-serif font-bold transition-all flex items-center justify-center gap-2 shrink-0 shadow-sm ${
                 isNight
                   ? 'bg-gradient-to-r from-[#182338] to-[#1d2b45] hover:from-[#202f4a] hover:to-[#25395c] border-[#c59a43]/40 text-[#d4af37]'
                   : 'bg-gradient-to-r from-[#fdfaf3] to-[#f5ebdb] hover:from-[#f7f0e1] hover:to-[#ede0cb] border-[#c59a43]/50 text-[#8e681b]'

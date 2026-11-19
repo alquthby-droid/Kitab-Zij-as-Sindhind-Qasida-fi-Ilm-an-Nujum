@@ -1099,7 +1099,7 @@ export const ARSkyViewModal: React.FC<ARSkyViewModalProps> = ({
 
           {/* Sensor State Badge */}
           <div
-            className={`px-2.5 py-1.5 rounded-xl border text-[10px] font-mono backdrop-blur-md flex items-center gap-1.5 ${
+            className={`px-2.5 py-1.5 rounded-xl border text-[10px] font-mono backdrop-blur-md flex items-center gap-1.5 shrink-0 ${
               sensorActive
                 ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300'
                 : 'bg-amber-950/80 border-amber-500/50 text-amber-300'
@@ -1109,22 +1109,24 @@ export const ARSkyViewModal: React.FC<ARSkyViewModalProps> = ({
             <span
               className={`w-1.5 h-1.5 rounded-full ${sensorActive ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`}
             />
-            <span>{sensorActive ? 'Giroskop & Sensor Aktif' : 'Simulasi AR'}</span>
+            <span className="hidden sm:inline">{sensorActive ? 'Giroskop & Sensor Aktif' : 'Simulasi AR'}</span>
+            <span className="sm:hidden">{sensorActive ? 'Sensor' : 'AR'}</span>
           </div>
         </div>
 
         {/* Right: Quick Action Buttons & Close */}
-        <div className="pointer-events-auto flex items-center gap-1.5">
+        <div className="pointer-events-auto flex items-center gap-1.5 shrink-0">
           {/* Torch Toggle (if camera torch is supported) */}
           {hasTorch && (
             <button
               onClick={handleToggleTorch}
-              className={`p-2.5 rounded-xl border backdrop-blur-md transition-colors ${
+              className={`min-h-[44px] min-w-[44px] flex items-center justify-center p-2.5 rounded-xl border backdrop-blur-md transition-colors ${
                 isTorchOn
                   ? 'bg-amber-500 text-black border-amber-400'
                   : 'bg-slate-900/80 border-slate-700 text-slate-300'
               }`}
               title="Senter Kamera"
+              aria-label="Senter Kamera"
             >
               <Zap className="w-4 h-4" />
             </button>
@@ -1133,12 +1135,13 @@ export const ARSkyViewModal: React.FC<ARSkyViewModalProps> = ({
           {/* Red Astronomical Night Mode Toggle */}
           <button
             onClick={() => setIsRedNightMode(!isRedNightMode)}
-            className={`p-2.5 rounded-xl border backdrop-blur-md transition-colors ${
+            className={`min-h-[44px] min-w-[44px] flex items-center justify-center p-2.5 rounded-xl border backdrop-blur-md transition-colors ${
               isRedNightMode
                 ? 'bg-red-600 text-white border-red-500'
                 : 'bg-slate-900/80 border-slate-700 text-slate-300 hover:text-red-400'
             }`}
             title="Mode Penglihatan Malam Astronomi (Filter Merah)"
+            aria-label="Filter Merah Astronomi"
           >
             <Eye className="w-4 h-4" />
           </button>
@@ -1146,12 +1149,13 @@ export const ARSkyViewModal: React.FC<ARSkyViewModalProps> = ({
           {/* Settings & Calibration Drawer Toggle */}
           <button
             onClick={() => setShowSettings(!showSettings)}
-            className={`p-2.5 rounded-xl border backdrop-blur-md transition-colors ${
+            className={`min-h-[44px] min-w-[44px] flex items-center justify-center p-2.5 rounded-xl border backdrop-blur-md transition-colors ${
               showSettings
                 ? 'bg-sky-500 text-black border-sky-400 font-bold'
                 : 'bg-slate-900/80 border-slate-700 text-slate-300'
             }`}
             title="Pengaturan & Kalibrasi Sensor AR"
+            aria-label="Pengaturan AR"
           >
             <Sliders className="w-4 h-4" />
           </button>
@@ -1159,8 +1163,9 @@ export const ARSkyViewModal: React.FC<ARSkyViewModalProps> = ({
           {/* Close AR View */}
           <button
             onClick={onClose}
-            className="p-2.5 rounded-xl border bg-slate-900/80 border-slate-700 text-slate-300 hover:bg-red-600 hover:border-red-500 hover:text-white transition-colors backdrop-blur-md"
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center p-2.5 rounded-xl border bg-slate-900/80 border-slate-700 text-slate-300 hover:bg-red-600 hover:border-red-500 hover:text-white transition-colors backdrop-blur-md"
             title="Tutup Mode AR"
+            aria-label="Tutup Mode AR"
           >
             <X className="w-4 h-4" />
           </button>
@@ -1189,9 +1194,9 @@ export const ARSkyViewModal: React.FC<ARSkyViewModalProps> = ({
       )}
 
       {/* BOTTOM HUD BAR (Observer location, cardinal quick buttons, and objects count) */}
-      <div className="absolute bottom-0 left-0 right-0 p-3 flex flex-wrap items-end justify-between gap-2 z-30 pointer-events-none">
+      <div className="absolute bottom-0 left-0 right-0 p-3 pb-safe flex flex-wrap items-end justify-between gap-2 z-30 pointer-events-none">
         {/* Left: Quick Look Azimuth Shortcuts */}
-        <div className="pointer-events-auto flex items-center gap-1 bg-slate-950/80 p-1.5 rounded-2xl border border-slate-800 backdrop-blur-md text-xs">
+        <div className="pointer-events-auto max-w-full overflow-x-auto no-scrollbar flex items-center gap-1 bg-slate-950/80 p-1.5 rounded-2xl border border-slate-800 backdrop-blur-md text-xs">
           {[
             { label: 'U (0°)', az: 0 },
             { label: 'T (90°)', az: 90 },
@@ -1206,7 +1211,7 @@ export const ARSkyViewModal: React.FC<ARSkyViewModalProps> = ({
                 if (preset.az !== undefined) targetAttitudeRef.current.azimuth = preset.az;
                 if (preset.alt !== undefined) targetAttitudeRef.current.altitude = preset.alt;
               }}
-              className="px-2 py-1 rounded-lg text-[10px] font-mono border border-slate-700/60 bg-slate-900/60 hover:bg-slate-800 text-slate-200 transition-colors"
+              className="px-2.5 py-1.5 rounded-lg text-[10px] font-mono border border-slate-700/60 bg-slate-900/60 hover:bg-slate-800 text-slate-200 transition-colors whitespace-nowrap shrink-0"
             >
               {preset.label}
             </button>
@@ -1262,13 +1267,17 @@ export const ARSkyViewModal: React.FC<ARSkyViewModalProps> = ({
 
       {/* SETTINGS & CALIBRATION SIDE DRAWER */}
       {showSettings && (
-        <div className="absolute top-16 right-3 w-80 max-h-[calc(100vh-5rem)] overflow-y-auto z-40 p-4 rounded-2xl bg-slate-950/95 border border-slate-700 shadow-2xl backdrop-blur-xl text-xs space-y-4">
+        <div className="absolute top-16 right-3 w-[calc(100vw-1.5rem)] sm:w-80 max-h-[calc(100dvh-5.5rem)] overflow-y-auto z-40 p-4 rounded-2xl bg-slate-950/95 border border-slate-700 shadow-2xl backdrop-blur-xl text-xs space-y-4">
           <div className="flex items-center justify-between pb-2 border-b border-slate-800">
             <span className="font-serif font-bold text-[#c59a43] flex items-center gap-1.5 text-sm">
               <Sliders className="w-4 h-4" />
-              Pengaturan & Kalibrasi AR
+              Pengaturan &amp; Kalibrasi AR
             </span>
-            <button onClick={() => setShowSettings(false)} className="p-1 hover:bg-slate-800 rounded">
+            <button
+              onClick={() => setShowSettings(false)}
+              className="min-h-[40px] min-w-[40px] flex items-center justify-center hover:bg-slate-800 rounded-lg"
+              aria-label="Tutup pengaturan AR"
+            >
               <X className="w-4 h-4" />
             </button>
           </div>
