@@ -112,3 +112,12 @@ export function getAnnotationsForTarget(targetType: string, targetId: string): R
   const all = getStoredAnnotations();
   return all.filter((a) => a.targetType === targetType && a.targetId === targetId);
 }
+
+export function replaceAllAnnotations(annotations: ResearchAnnotation[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(annotations));
+  } catch {
+    // ignore storage quota errors
+  }
+}
+

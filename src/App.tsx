@@ -66,7 +66,7 @@ import {
   BellRing,
   Menu,
   X,
-  Share2,
+  Settings,
   Moon,
   Sun,
   BookOpen,
@@ -141,6 +141,7 @@ export function App() {
     getSavedArabicFontId()
   );
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
+  const [dataRefreshVersion, setDataRefreshVersion] = useState<number>(0);
 
   // Keep Tailwind dark: variant and mobile status bar theme-color synchronized
   useEffect(() => {
@@ -543,19 +544,19 @@ export function App() {
               {/* Install PWA Button (Android / iOS / Desktop) */}
               <PWAInstallButton theme={theme} compact />
 
-              {/* Share / Publish s.id & Arabic Font Button (Desktop/Tablet header; mobile uses Drawer) */}
+              {/* Settings, Local JSON Backup, Arabic Font & s.id Publish Button */}
               <button
                 onClick={() => setIsShareModalOpen(true)}
-                className={`hidden sm:inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors shadow-sm ${
+                className={`hidden sm:inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors shadow-sm cursor-pointer ${
                   isNight
                     ? 'bg-[#151c2e] hover:bg-[#202c46] border-emerald-500/35 text-emerald-300'
                     : 'bg-[#ede5d5] hover:bg-[#e4dac6] border-emerald-600/35 text-emerald-800'
                 }`}
-                title="Publikasi s.id, Bagikan Tautan & Pilih Font Arab"
-                aria-label="Publikasi s.id dan Font Arab"
+                title="Pengaturan Aplikasi, Backup Data Lokal (JSON), Font Arab & Publikasi s.id"
+                aria-label="Pengaturan dan Backup Data Lokal"
               >
-                <Share2 className="w-3.5 h-3.5" />
-                <span className="hidden xl:inline">s.id / Font</span>
+                <Settings className="w-3.5 h-3.5" />
+                <span>Pengaturan</span>
               </button>
 
               {/* PDF Export Button (Desktop/Tablet header; mobile uses Drawer) */}
@@ -897,6 +898,7 @@ export function App() {
 
         {activeTab === 'ritual' && (
           <ManzilRitualSchedulerView
+            key={`ritual-${dataRefreshVersion}`}
             currentDateInfo={historicalDate}
             observerLocation={observerLocation}
             theme={theme}
@@ -994,12 +996,13 @@ export function App() {
 
         {activeTab === 'iatroastrology' && (
           <IatroastrologyView
+            key={`iatro-${dataRefreshVersion}`}
             positions={chartData.positions}
             aspects={chartData.aspects}
             currentDateInfo={historicalDate}
             theme={theme}
             onAnnotate={(title, content) =>
-              handleOpenAnnotation('horoscope', 'iatroastrology', `${title} - ${content}`)
+              handleOpenAnnotation('horoscope', 'iatroastrology', `${title}\n\n${content}`)
             }
           />
         )}
@@ -1258,8 +1261,8 @@ export function App() {
                     : 'bg-[#f1e9d9] border-emerald-600/35 text-emerald-800'
                 }`}
               >
-                <Share2 className="w-4 h-4" />
-                <span>s.id / Font</span>
+                <Settings className="w-4 h-4" />
+                <span>Pengaturan</span>
               </button>
 
               <button
@@ -1314,13 +1317,28 @@ export function App() {
         </div>
       )}
 
-      {/* Share / s.id Publish & Arabic Font Modal */}
+      {/* Settings, Local Data Backup (JSON), Arabic Font & s.id Publish Modal */}
       <SharePublishModal
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
         theme={theme}
         arabicFontId={arabicFontId}
         onChangeArabicFont={(fontId) => setArabicFontId(fontId)}
+        onChangeTheme={(nextTheme) => {
+          setTheme(nextTheme);
+          localStorage.setItem('sindhind_theme', nextTheme);
+        }}
+        onBackupRestored={(result) => {
+          refreshAnnotations();
+          refreshRitualCount();
+          if (result.restoredTheme) {
+            setTheme(result.restoredTheme);
+          }
+          if (result.restoredArabicFontId) {
+            setArabicFontId(result.restoredArabicFontId);
+          }
+          setDataRefreshVersion((v) => v + 1);
+        }}
       />
 
       {/* User Guide Modal */}
