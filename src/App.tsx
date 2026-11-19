@@ -47,6 +47,7 @@ import { HisabJumalPasaranView } from './components/HisabJumalPasaranView';
 import { AmuletWafaqGeneratorView } from './components/AmuletWafaqGeneratorView';
 import { IatroastrologyView } from './components/IatroastrologyView';
 import { PlanetaryHistoricalAnalysisView } from './components/PlanetaryHistoricalAnalysisView';
+import { GoogleSheetsSyncView } from './components/GoogleSheetsSyncView';
 import { StarMapView } from './components/StarMapView';
 import { ManzilCalculatorView } from './components/ManzilCalculatorView';
 import { ManzilRitualSchedulerView } from './components/ManzilRitualSchedulerView';
@@ -90,6 +91,7 @@ import {
   Milestone,
   Stethoscope,
   LineChart,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 export function App() {
@@ -111,6 +113,7 @@ export function App() {
     | 'wafaq'
     | 'iatroastrology'
     | 'planetary_analysis'
+    | 'google_sheets'
     | 'ephemeris'
     | 'calendar'
     | 'manuscripts'
@@ -422,6 +425,7 @@ export function App() {
     { id: 'wafaq', label: 'طِلَسْم وَأَوْفَاق', sub: 'Amulet & Wafaq', icon: Shield },
     { id: 'iatroastrology', label: 'الطب النجومي', sub: 'Iatroastrology', icon: Stethoscope },
     { id: 'planetary_analysis', label: 'تحليل الكواكب', sub: 'Data Analisis Planet', icon: LineChart },
+    { id: 'google_sheets', label: 'جداول جوجل', sub: 'Google Sheets', icon: FileSpreadsheet },
     { id: 'ephemeris', label: 'جدول الكواكب', sub: 'Ephemeris', icon: Sparkles },
     { id: 'calendar', label: 'تحويل التواريخ', sub: 'Tarikh & Kalender', icon: Calendar },
     { id: 'interpretation', label: 'أحكام النجوم', sub: 'Tafsir Astrologi', icon: Info },
@@ -1008,6 +1012,19 @@ export function App() {
             onApplyDate={applyNewDate}
             onAnnotate={(title, content) =>
               handleOpenAnnotation('planet', 'planetary_analysis', `${title}\n\n${content}`)
+            }
+          />
+        )}
+
+        {activeTab === 'google_sheets' && (
+          <GoogleSheetsSyncView
+            currentDateInfo={historicalDate}
+            positions={chartData.positions}
+            observerLocation={observerLocation}
+            annotations={annotations}
+            theme={theme}
+            onAnnotate={(title, content) =>
+              handleOpenAnnotation('horoscope', 'google_sheets', `${title}\n\n${content}`)
             }
           />
         )}
