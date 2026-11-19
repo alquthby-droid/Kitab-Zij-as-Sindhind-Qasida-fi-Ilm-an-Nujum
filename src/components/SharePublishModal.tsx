@@ -9,6 +9,8 @@ import {
   AlertTriangle,
   CheckCircle2,
   Type,
+  Code2,
+  MessageSquare,
 } from 'lucide-react';
 import { ThemeMode } from '../types';
 import {
@@ -36,6 +38,9 @@ export const SharePublishModal: React.FC<SharePublishModalProps> = ({
   const isNight = theme === 'night';
   const [copiedAppUrl, setCopiedAppUrl] = useState(false);
   const [copiedSidUrl, setCopiedSidUrl] = useState(false);
+  const [copiedEmbed, setCopiedEmbed] = useState(false);
+  const [copiedWaText, setCopiedWaText] = useState(false);
+  const [deployMode, setDeployMode] = useState<'shortlink' | 'microsite' | 'domain'>('shortlink');
   const [customSidSlug, setCustomSidSlug] = useState<string>(() => {
     try {
       return localStorage.getItem(SID_LINK_STORAGE_KEY) || 'https://s.id/zij-sindhind';
@@ -63,15 +68,26 @@ export const SharePublishModal: React.FC<SharePublishModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleCopy = async (text: string, target: 'app' | 'sid') => {
+  const embedIframeCode = `<iframe src="${suggestedShareUrl}" title="Zij as-Sindhind & Qasida fi 'Ilm an-Nujum" style="width:100%;min-height:85vh;border:0;border-radius:16px;" allow="geolocation" loading="lazy"></iframe>`;
+  const whatsappShareText = `Zij as-Sindhind & Qasida fi 'Ilm an-Nujum — Aplikasi Falak Klasik, Ephemeris 7 Kawkab, 28 Manzil, Wafaq Kaligrafi Arab & Analisis Historis 100 Tahun.\n\nAkses langsung: ${
+    customSidSlug.trim() || suggestedShareUrl
+  }`;
+
+  const handleCopy = async (text: string, target: 'app' | 'sid' | 'embed' | 'wa') => {
     try {
       await navigator.clipboard.writeText(text);
       if (target === 'app') {
         setCopiedAppUrl(true);
         setTimeout(() => setCopiedAppUrl(false), 2000);
-      } else {
+      } else if (target === 'sid') {
         setCopiedSidUrl(true);
         setTimeout(() => setCopiedSidUrl(false), 2000);
+      } else if (target === 'embed') {
+        setCopiedEmbed(true);
+        setTimeout(() => setCopiedEmbed(false), 2000);
+      } else {
+        setCopiedWaText(true);
+        setTimeout(() => setCopiedWaText(false), 2000);
       }
     } catch {
       // fallback ignored
@@ -306,33 +322,131 @@ export const SharePublishModal: React.FC<SharePublishModalProps> = ({
               </div>
             </div>
 
-            {/* 3-step s.id publish guide + direct anchor */}
-            <div className="pt-2 border-t border-current/10 space-y-2.5 text-xs">
-              <div className="font-serif font-bold text-[#c59a43]">
-                Langkah Publish ke s.id:
+            {/* 3 Jalur Deploy / Publikasi Domain s.id */}
+            <div className="pt-2 border-t border-current/10 space-y-3 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="font-serif font-bold text-[#c59a43]">
+                  Panduan Deploy &amp; Tautkan ke Domain s.id:
+                </div>
+                <div className="flex items-center gap-1">
+                  {(
+                    [
+                      { id: 'shortlink', label: 'Shortlink s.id' },
+                      { id: 'microsite', label: 'Microsite Embed' },
+                      { id: 'domain', label: 'Custom Domain' },
+                    ] as const
+                  ).map((mode) => (
+                    <button
+                      key={mode.id}
+                      type="button"
+                      onClick={() => setDeployMode(mode.id)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors cursor-pointer ${
+                        deployMode === mode.id
+                          ? 'bg-[#c59a43] text-black border-[#c59a43]'
+                          : 'border-current/20 opacity-80 hover:opacity-100'
+                      }`}
+                    >
+                      {mode.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <ol className="list-decimal list-inside space-y-1 opacity-85 leading-relaxed">
-                <li>
-                  Pastikan tombol <strong>Share</strong> di Google AI Studio aktif agar URL publik (<code className="font-mono">ais-pre-...</code>) dapat dibuka umum.
-                </li>
-                <li>
-                  Klik <strong>Salin URL</strong> di atas, lalu masuk ke dashboard <strong>s.id</strong> untuk membuat <em>Shortlink</em> atau komponen tombol di <em>Microsite s.id</em>.
-                </li>
-                <li>
-                  Metadata OpenGraph, ikon astrolab, dan tata letak seluler Android/iOS sudah dikonfigurasi agar tampil rapi saat link <code className="font-mono">s.id</code> Anda dibagikan.
-                </li>
-              </ol>
+
+              {deployMode === 'shortlink' && (
+                <ol className="list-decimal list-inside space-y-1.5 opacity-85 leading-relaxed">
+                  <li>
+                    Pastikan aplikasi sudah dibagikan ke publik via tombol <strong>Share App</strong> sehingga tautan <code className="font-mono">ais-pre-...run.app</code> aktif untuk umum.
+                  </li>
+                  <li>
+                    Klik <strong>Salin URL</strong> di atas, lalu buka <strong>home.s.id → Links → Create New Link</strong>.
+                  </li>
+                  <li>
+                    Tempel URL aplikasi di kolom tujuan dan isi custom back-half (mis. <code className="font-mono">s.id/zij-sindhind</code>), lalu simpan.
+                  </li>
+                </ol>
+              )}
+
+              {deployMode === 'microsite' && (
+                <div className="space-y-2">
+                  <p className="opacity-85 leading-relaxed">
+                    Untuk menanam aplikasi langsung di halaman <strong>Microsite s.id</strong> atau menambahkan tombol akses cepat, salin potongan kode Embed di bawah ini:
+                  </p>
+                  <textarea
+                    readOnly
+                    rows={3}
+                    value={embedIframeCode}
+                    className={`w-full p-2.5 rounded-xl border text-[11px] font-mono select-all ${
+                      isNight
+                        ? 'bg-[#0b101d] border-[#263552] text-stone-200'
+                        : 'bg-white border-[#dacdb2] text-stone-800'
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(embedIframeCode, 'embed')}
+                    className={`min-h-[40px] px-3 py-1.5 rounded-xl border text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer ${
+                      isNight
+                        ? 'bg-[#192338] border-[#2d3f61] hover:bg-[#22304c]'
+                        : 'bg-white border-[#dacdb2] hover:bg-[#f0e7d6]'
+                    }`}
+                  >
+                    {copiedEmbed ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Code2 className="w-3.5 h-3.5" />}
+                    <span>{copiedEmbed ? 'Kode Embed Disalin' : 'Salin Kode Embed Microsite'}</span>
+                  </button>
+                </div>
+              )}
+
+              {deployMode === 'domain' && (
+                <ol className="list-decimal list-inside space-y-1.5 opacity-85 leading-relaxed">
+                  <li>
+                    Jalankan <code className="font-mono">npm run build</code> untuk menghasilkan folder statis <code className="font-mono">dist/</code> (sudah dilengkapi PWA manifest &amp; Service Worker).
+                  </li>
+                  <li>
+                    Unggah folder <code className="font-mono">dist/</code> ke <strong>Cloudflare Pages</strong>, <strong>Vercel</strong>, atau <strong>Netlify</strong> (gratis SSL HTTPS).
+                  </li>
+                  <li>
+                    Hubungkan custom domain Anda di <strong>s.id Custom Domain</strong> atau arahkan DNS <code className="font-mono">CNAME</code> dari registrar domain <code className="font-mono">.id</code> Anda ke host statis tersebut.
+                  </li>
+                </ol>
+              )}
 
               <div className="pt-1 flex flex-wrap gap-2">
                 <a
-                  href="https://home.s.id/"
+                  href="https://home.s.id/links"
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={() => handleCopy(suggestedShareUrl, 'app')}
                   className="min-h-[44px] inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors shadow-sm"
                 >
                   <ExternalLink className="w-4 h-4" />
-                  <span>Buka Dashboard s.id</span>
+                  <span>Salin URL &amp; Buka Shortlink s.id</span>
                 </a>
+                <a
+                  href="https://home.s.id/microsite"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => handleCopy(suggestedShareUrl, 'app')}
+                  className={`min-h-[44px] inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl border text-xs font-semibold transition-colors ${
+                    isNight
+                      ? 'bg-[#192338] border-emerald-500/40 text-emerald-300 hover:bg-[#22304c]'
+                      : 'bg-white border-emerald-600/40 text-emerald-800 hover:bg-[#f0e7d6]'
+                  }`}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Buka Microsite s.id</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => handleCopy(whatsappShareText, 'wa')}
+                  className={`min-h-[44px] inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl border text-xs font-semibold transition-colors cursor-pointer ${
+                    isNight
+                      ? 'bg-[#192338] border-[#2d3f61] hover:bg-[#22304c]'
+                      : 'bg-white border-[#dacdb2] hover:bg-[#f0e7d6]'
+                  }`}
+                >
+                  {copiedWaText ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <MessageSquare className="w-3.5 h-3.5" />}
+                  <span>{copiedWaText ? 'Teks WA Disalin' : 'Salin Teks Bagikan WA'}</span>
+                </button>
                 {customSidSlug.startsWith('https://s.id/') && (
                   <a
                     href={customSidSlug}

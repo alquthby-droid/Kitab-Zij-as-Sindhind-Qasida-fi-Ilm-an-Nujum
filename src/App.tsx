@@ -154,10 +154,12 @@ export function App() {
     applyGlobalArabicFont(arabicFontId);
   }, [arabicFontId]);
 
-  // Sync canonical link and og:url to runtime origin + pathname for s.id / social sharing
+  // Sync canonical link, og:url, and absolute og:image / twitter:image for s.id & social sharing
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const canonicalUrl = `${window.location.origin}${window.location.pathname}`;
+    const absoluteIconUrl = `${window.location.origin}/pwa-512x512.png`;
+
     let canonical = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
     if (!canonical) {
       canonical = document.createElement('link');
@@ -166,13 +168,19 @@ export function App() {
     }
     canonical.href = canonicalUrl;
 
-    let ogUrl = document.querySelector('meta[property="og:url"]') as HTMLMetaElement | null;
-    if (!ogUrl) {
-      ogUrl = document.createElement('meta');
-      ogUrl.setAttribute('property', 'og:url');
-      document.head.appendChild(ogUrl);
-    }
-    ogUrl.content = canonicalUrl;
+    const upsertMeta = (attr: 'property' | 'name', key: string, content: string) => {
+      let el = document.querySelector(`meta[${attr}="${key}"]`) as HTMLMetaElement | null;
+      if (!el) {
+        el = document.createElement('meta');
+        el.setAttribute(attr, key);
+        document.head.appendChild(el);
+      }
+      el.content = content;
+    };
+
+    upsertMeta('property', 'og:url', canonicalUrl);
+    upsertMeta('property', 'og:image', absoluteIconUrl);
+    upsertMeta('name', 'twitter:image', absoluteIconUrl);
   }, []);
 
   const toggleTheme = () => {
